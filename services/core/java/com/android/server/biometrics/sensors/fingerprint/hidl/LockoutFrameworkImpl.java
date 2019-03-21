@@ -29,6 +29,7 @@ import android.content.IntentFilter;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.os.SystemProperties;
 import android.util.Slog;
 import android.util.SparseBooleanArray;
 import android.util.SparseIntArray;
@@ -51,6 +52,7 @@ public class LockoutFrameworkImpl implements LockoutTracker {
     private static final int MAX_FAILED_ATTEMPTS_LOCKOUT_PERMANENT = 20;
     private static final long FAIL_LOCKOUT_TIMEOUT_MS = 30 * 1000;
     private static final String KEY_LOCKOUT_RESET_USER = "lockout_reset_user";
+    private static final String DISABLE_FP_LOCKOUTS_PROPERTY = "persist.sys.fp.lockouts.disable";
 
     private final class LockoutReceiver extends BroadcastReceiver {
         @Override
@@ -133,24 +135,28 @@ public class LockoutFrameworkImpl implements LockoutTracker {
 
     @Override
     public void addFailedAttemptForUser(int userId) {
-        mFailedAttempts.put(userId, mFailedAttempts.get(userId, 0) + 1);
-        mTimedLockoutCleared.put(userId, false);
+        if (!SystemProperties.getBoolean(DISABLE_FP_LOCKOUTS_PROPERTY, false)) {
+            mFailedAttempts.put(userId, mFailedAttempts.get(userId, 0) + 1);
+            mTimedLockoutCleared.put(userId, false);
 
-        if (getLockoutModeForUser(userId) != LOCKOUT_NONE) {
-            scheduleLockoutResetForUser(userId);
+            if (getLockoutModeForUser(userId) != LOCKOUT_NONE) {
+                scheduleLockoutResetForUser(userId);
+            }
         }
     }
 
     @Override
     @LockoutMode
     public int getLockoutModeForUser(int userId) {
-        final int failedAttempts = mFailedAttempts.get(userId, 0);
-        if (failedAttempts >= MAX_FAILED_ATTEMPTS_LOCKOUT_PERMANENT) {
-            return LOCKOUT_PERMANENT;
-        } else if (failedAttempts > 0
-                && !mTimedLockoutCleared.get(userId, false)
-                && (failedAttempts % MAX_FAILED_ATTEMPTS_LOCKOUT_TIMED == 0)) {
-            return LOCKOUT_TIMED;
+        if (!SystemProperties.getBoolean(DISABLE_FP_LOCKOUTS_PROPERTY, false)) {
+            final int failedAttempts = mFailedAttempts.get(userId, 0);
+            if (failedAttempts >= MAX_FAILED_ATTEMPTS_LOCKOUT_PERMANENT) {
+                return LOCKOUT_PERMANENT;
+            } else if (failedAttempts > 0
+                    && !mTimedLockoutCleared.get(userId, false)
+                    && (failedAttempts % MAX_FAILED_ATTEMPTS_LOCKOUT_TIMED == 0)) {
+                return LOCKOUT_TIMED;
+            }
         }
         return LOCKOUT_NONE;
     }
