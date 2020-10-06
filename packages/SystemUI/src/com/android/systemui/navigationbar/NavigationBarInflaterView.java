@@ -135,6 +135,7 @@ public class NavigationBarInflaterView extends FrameLayout {
 
     private boolean mInverseLayout;
     private boolean mIsHintEnabled;
+    private boolean mUsingCustomLayout;
 
     private final ContentObserver mContentObserver;
 
@@ -159,6 +160,9 @@ public class NavigationBarInflaterView extends FrameLayout {
                     mContext.getMainExecutor().execute(() -> {
                         onLikelyDefaultLayoutChange();
                     });
+                } else if (Settings.Secure.getUriFor(NAV_BAR_VIEWS).equals(uri)) {
+                    setNavigationBarLayout(Settings.Secure.getString(mContext.getContentResolver(),
+                            NAV_BAR_VIEWS));
                 }
             }
         };
@@ -215,12 +219,16 @@ public class NavigationBarInflaterView extends FrameLayout {
         Uri navBarInverse = Settings.Secure.getUriFor(NAV_BAR_INVERSE);
         Uri navigationBarHint = LineageSettings.System.getUriFor(
                 LineageSettings.System.NAVIGATION_BAR_HINT);
+        Uri navBarViews = Settings.Secure.getUriFor(NAV_BAR_VIEWS);
         mContext.getContentResolver().registerContentObserver(navBarInverse, false,
                 mContentObserver);
         mContext.getContentResolver().registerContentObserver(navigationBarHint, false,
                 mContentObserver);
+        mContext.getContentResolver().registerContentObserver(navBarViews, false,
+                mContentObserver);
         mContentObserver.onChange(true, navBarInverse);
         mContentObserver.onChange(true, navigationBarHint);
+        mContentObserver.onChange(true, navBarViews);
     }
 
     @Override
@@ -237,12 +245,25 @@ public class NavigationBarInflaterView extends FrameLayout {
     }
 
     public void onLikelyDefaultLayoutChange() {
+        // Don't override custom layouts
+        if (mUsingCustomLayout) return;
+
         // Reevaluate new layout
         final String newValue = getDefaultLayout();
         if (!Objects.equals(mCurrentLayout, newValue)) {
             clearViews();
             inflateLayout(newValue);
         }
+    }
+
+    public void setNavigationBarLayout(String layoutValue) {
+        mContext.getMainExecutor().execute(() -> {
+            if (!Objects.equals(mCurrentLayout, layoutValue)) {
+                mUsingCustomLayout = layoutValue != null;
+                clearViews();
+                inflateLayout(layoutValue);
+            }
+        });
     }
 
     public void setButtonDispatchers(SparseArray<ButtonDispatcher> buttonDispatchers) {
