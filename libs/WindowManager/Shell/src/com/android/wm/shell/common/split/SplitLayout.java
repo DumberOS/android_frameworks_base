@@ -168,23 +168,8 @@ public final class SplitLayout implements DisplayInsetsController.OnInsetsChange
     }
 
     private void updateDividerConfig(Context context) {
-        final Resources resources = context.getResources();
-        final Display display = context.getDisplay();
-        final int dividerInset = resources.getDimensionPixelSize(
-                com.android.internal.R.dimen.docked_stack_divider_insets);
-        int radius = 0;
-        RoundedCorner corner = display.getRoundedCorner(RoundedCorner.POSITION_TOP_LEFT);
-        radius = corner != null ? Math.max(radius, corner.getRadius()) : radius;
-        corner = display.getRoundedCorner(RoundedCorner.POSITION_TOP_RIGHT);
-        radius = corner != null ? Math.max(radius, corner.getRadius()) : radius;
-        corner = display.getRoundedCorner(RoundedCorner.POSITION_BOTTOM_RIGHT);
-        radius = corner != null ? Math.max(radius, corner.getRadius()) : radius;
-        corner = display.getRoundedCorner(RoundedCorner.POSITION_BOTTOM_LEFT);
-        radius = corner != null ? Math.max(radius, corner.getRadius()) : radius;
-
-        mDividerInsets = Math.max(dividerInset, radius);
-        mDividerSize = resources.getDimensionPixelSize(R.dimen.split_divider_bar_width);
-        mDividerWindowWidth = mDividerSize + 2 * mDividerInsets;
+        mDividerWindowWidth = context.getResources().getDimensionPixelSize(
+                R.dimen.split_divider_bar_width);
     }
 
     /** Gets bounds of the primary split with screen based coordinate. */
