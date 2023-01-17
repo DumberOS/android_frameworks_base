@@ -283,6 +283,13 @@ public class KeyguardStatusViewController extends ViewController<KeyguardStatusV
     }
 
     /**
+     * The amount we're in doze.
+     */
+    public void setDarkAmount(float darkAmount) {
+        mView.setDarkAmount(darkAmount);
+    }
+
+    /**
      * Set which clock should be displayed on the keyguard. The other one will be automatically
      * hidden.
      */
