@@ -144,8 +144,6 @@ public class Fingerprint21 implements IHwBinder.DeathRecipient, ServiceProvider 
     private final boolean mIsPowerbuttonFps;
     private AidlSession mSession;
 
-    private boolean mCleanup;
-
     private final class BiometricTaskStackListener extends TaskStackListener {
         @Override
         public void onTaskStackChanged() {
@@ -377,9 +375,6 @@ public class Fingerprint21 implements IHwBinder.DeathRecipient, ServiceProvider 
                             Slog.d(TAG, "Initializing AuthenticationStatsCollector");
                             mAuthenticationStatsCollector = collector;
                         });
-
-        mCleanup = context.getResources().getBoolean(
-                org.lineageos.platform.internal.R.bool.config_cleanupUnusedFingerprints);
 
         try {
             ActivityManager.getService().registerUserSwitchObserver(mUserSwitchObserver, TAG);
@@ -1012,9 +1007,6 @@ public class Fingerprint21 implements IHwBinder.DeathRecipient, ServiceProvider 
 
     private void scheduleInternalCleanup(int userId,
             @Nullable ClientMonitorCallback callback) {
-        if (!mCleanup) {
-            return;
-        }
         mHandler.post(() -> {
             scheduleUpdateActiveUserWithoutHandler(userId);
 
