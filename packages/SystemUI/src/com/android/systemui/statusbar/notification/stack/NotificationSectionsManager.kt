@@ -244,10 +244,10 @@ class NotificationSectionsManager @Inject internal constructor(
         }
     }
 
-    fun setHeaderForegroundColors(@ColorInt onSurface: Int, @ColorInt onSurfaceVariant: Int) {
-        peopleHeaderView?.setForegroundColors(onSurface, onSurfaceVariant)
-        silentHeaderView?.setForegroundColors(onSurface, onSurfaceVariant)
-        alertingHeaderView?.setForegroundColors(onSurface, onSurfaceVariant)
+    fun setHeaderForegroundColor(@ColorInt color: Int) {
+        peopleHeaderView?.setForegroundColor(color)
+        silentHeaderView?.setForegroundColor(color)
+        alertingHeaderView?.setForegroundColor(color)
     }
 
     companion object {

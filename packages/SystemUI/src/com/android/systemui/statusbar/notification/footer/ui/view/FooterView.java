@@ -361,25 +361,26 @@ public class FooterView extends StackScrollerDecorView {
      */
     public void updateColors() {
         Resources.Theme theme = mContext.getTheme();
-        final @ColorInt int onSurface = Utils.getColorAttrDefaultColor(mContext,
-                com.android.internal.R.attr.materialColorOnSurface);
+        final @ColorInt int textColor = getResources().getColor(R.color.notif_pill_text, theme);
         final Drawable clearAllBg = theme.getDrawable(R.drawable.notif_footer_btn_background);
         final Drawable manageBg = theme.getDrawable(R.drawable.notif_footer_btn_background);
-        if (!notificationBackgroundTintOptimization()) {
-            final @ColorInt int scHigh = Utils.getColorAttrDefaultColor(mContext,
-                    com.android.internal.R.attr.materialColorSurfaceContainerHigh);
-            if (scHigh != 0) {
-                final ColorFilter bgColorFilter = new PorterDuffColorFilter(scHigh, SRC_ATOP);
-                clearAllBg.setColorFilter(bgColorFilter);
-                manageBg.setColorFilter(bgColorFilter);
-            }
+        // TODO(b/282173943): Remove redundant tinting once Resources are thread-safe
+        final @ColorInt int buttonBgColor =
+                Utils.getColorAttrDefaultColor(mContext, com.android.internal.R.attr.colorSurface);
+        final ColorFilter bgColorFilter = new PorterDuffColorFilter(buttonBgColor, SRC_ATOP);
+        if (buttonBgColor != 0) {
+            clearAllBg.setColorFilter(bgColorFilter);
+            manageBg.setColorFilter(bgColorFilter);
         }
         mClearAllButton.setBackground(clearAllBg);
-        mClearAllButton.setTextColor(onSurface);
+        mClearAllButton.setTextColor(textColor);
         mManageOrHistoryButton.setBackground(manageBg);
-        mManageOrHistoryButton.setTextColor(onSurface);
-        mSeenNotifsFooterTextView.setTextColor(onSurface);
-        mSeenNotifsFooterTextView.setCompoundDrawableTintList(ColorStateList.valueOf(onSurface));
+        mManageOrHistoryButton.setTextColor(textColor);
+        final @ColorInt int labelTextColor =
+                Utils.getColorAttrDefaultColor(mContext, android.R.attr.textColorPrimary);
+        mSeenNotifsFooterTextView.setTextColor(labelTextColor);
+        mSeenNotifsFooterTextView.setCompoundDrawableTintList(
+                ColorStateList.valueOf(labelTextColor));
     }
 
     private void updateResources() {

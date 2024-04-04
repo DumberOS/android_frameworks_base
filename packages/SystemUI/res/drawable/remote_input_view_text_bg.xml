@@ -14,13 +14,12 @@
   ~ limitations under the License.
   -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:androidprv="http://schemas.android.com/apk/prv/res/android"
     android:shape="rectangle">
 
-    <solid android:color="?androidprv:attr/materialColorSurfaceDim" />
+    <solid android:color="?android:attr/colorBackgroundFloating" />
     <stroke
         android:width="@dimen/remote_input_view_text_stroke"
-        android:color="?androidprv:attr/materialColorPrimary"/>
+        android:color="?android:attr/colorAccent"/>
     <padding
         android:bottom="0dp"
         android:left="12dp"

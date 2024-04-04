@@ -351,7 +351,7 @@ public class NotificationStackScrollLayout extends ViewGroup implements Dumpable
     private boolean mAnimateNextBackgroundTop;
     private boolean mAnimateNextBackgroundBottom;
     private boolean mAnimateNextSectionBoundsChange;
-    private @ColorInt int mBgColor;
+    private int mBgColor;
     private float mDimAmount;
     private ValueAnimator mDimAnimator;
     private final ArrayList<ExpandableView> mTmpSortedChildren = new ArrayList<>();
@@ -665,8 +665,8 @@ public class NotificationStackScrollLayout extends ViewGroup implements Dumpable
         mSections = mSectionsManager.createSectionsForBuckets();
 
         mAmbientState = Dependency.get(AmbientState.class);
-        mBgColor = Utils.getColorAttr(mContext,
-                com.android.internal.R.attr.materialColorSurfaceContainerHigh).getDefaultColor();
+        mBgColor = Utils.getColorAttr(mContext, android.R.attr.colorBackgroundFloating)
+                .getDefaultColor();
         int minHeight = res.getDimensionPixelSize(R.dimen.notification_min_height);
         int maxHeight = res.getDimensionPixelSize(R.dimen.notification_max_height);
         mSplitShadeMinContentHeight = res.getDimensionPixelSize(
@@ -810,8 +810,8 @@ public class NotificationStackScrollLayout extends ViewGroup implements Dumpable
     }
 
     void updateBgColor() {
-        mBgColor = Utils.getColorAttr(mContext,
-                com.android.internal.R.attr.materialColorSurfaceContainerHigh).getDefaultColor();
+        mBgColor = Utils.getColorAttr(mContext, android.R.attr.colorBackgroundFloating)
+                .getDefaultColor();
         updateBackgroundDimming();
         for (int i = 0; i < getChildCount(); i++) {
             View child = getChildAt(i);
@@ -4622,22 +4622,19 @@ public class NotificationStackScrollLayout extends ViewGroup implements Dumpable
     }
 
     /**
-     * Update colors of section headers, shade footer, and empty shade views.
+     * Update colors of "dismiss" and "empty shade" views.
      */
     void updateDecorViews() {
-        final @ColorInt int onSurface = Utils.getColorAttrDefaultColor(
-                mContext, com.android.internal.R.attr.materialColorOnSurface);
-        final @ColorInt int onSurfaceVariant = Utils.getColorAttrDefaultColor(
-                mContext, com.android.internal.R.attr.materialColorOnSurfaceVariant);
-
-        mSectionsManager.setHeaderForegroundColors(onSurface, onSurfaceVariant);
+        final @ColorInt int textColor =
+                Utils.getColorAttrDefaultColor(mContext, android.R.attr.textColorPrimary);
+        mSectionsManager.setHeaderForegroundColor(textColor);
 
         if (mFooterView != null) {
             mFooterView.updateColors();
         }
 
         if (mEmptyShadeView != null) {
-            mEmptyShadeView.setTextColors(onSurface, onSurfaceVariant);
+            mEmptyShadeView.setTextColor(textColor);
         }
     }
 

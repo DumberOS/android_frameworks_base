@@ -1504,7 +1504,7 @@ public class NotificationChildrenContainer extends ViewGroup
         Resources.Theme theme = new ContextThemeWrapper(mContext,
                 com.android.internal.R.style.Theme_DeviceDefault_DayNight).getTheme();
         try (TypedArray ta = theme.obtainStyledAttributes(
-                new int[]{com.android.internal.R.attr.materialColorPrimary})) {
+                new int[]{com.android.internal.R.attr.colorAccent})) {
             color = ta.getColor(0, color);
         }
         mHybridGroupManager.setOverflowNumberColor(mOverflowNumber, color);
