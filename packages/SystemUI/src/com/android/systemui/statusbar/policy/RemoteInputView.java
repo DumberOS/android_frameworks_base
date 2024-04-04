@@ -130,7 +130,7 @@ public class RemoteInputView extends LinearLayout implements View.OnClickListene
     private ImageView mDelete;
     private ImageView mDeleteBg;
     private boolean mColorized;
-    private int mLastBackgroundColor;
+    private int mTint;
     private boolean mResetting;
     @Nullable
     private RevealParams mRevealParams;
@@ -181,9 +181,10 @@ public class RemoteInputView extends LinearLayout implements View.OnClickListene
         mEditorActionHandler = new EditorActionHandler();
         mUiEventLogger = Dependency.get(UiEventLogger.class);
         TypedArray ta = getContext().getTheme().obtainStyledAttributes(new int[]{
-                com.android.internal.R.attr.materialColorSurfaceDim,
+                com.android.internal.R.attr.colorAccent,
+                com.android.internal.R.attr.colorSurface,
         });
-        mLastBackgroundColor = ta.getColor(0, 0);
+        mTint = ta.getColor(0, 0);
         ta.recycle();
     }
 
@@ -209,9 +210,9 @@ public class RemoteInputView extends LinearLayout implements View.OnClickListene
      * @param backgroundColor colorized notification color
      */
     public void setBackgroundTintColor(final int backgroundColor, boolean colorized) {
-        if (colorized == mColorized && backgroundColor == mLastBackgroundColor) return;
+        if (colorized == mColorized && backgroundColor == mTint) return;
         mColorized = colorized;
-        mLastBackgroundColor = backgroundColor;
+        mTint = backgroundColor;
         final int editBgColor;
         final int deleteBgColor;
         final int deleteFgColor;
@@ -236,8 +237,8 @@ public class RemoteInputView extends LinearLayout implements View.OnClickListene
             hintColor = mContext.getColor(R.color.remote_input_hint);
             deleteFgColor = textColor.getDefaultColor();
             try (TypedArray ta = getContext().getTheme().obtainStyledAttributes(new int[]{
-                    com.android.internal.R.attr.materialColorSurfaceDim,
-                    com.android.internal.R.attr.materialColorSurfaceVariant
+                    com.android.internal.R.attr.colorSurfaceHighlight,
+                    com.android.internal.R.attr.colorSurfaceVariant
             })) {
                 editBgColor = ta.getColor(0, backgroundColor);
                 deleteBgColor = ta.getColor(1, Color.GRAY);

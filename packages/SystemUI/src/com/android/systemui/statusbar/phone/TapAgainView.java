@@ -20,7 +20,6 @@ import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
-import android.annotation.ColorInt;
 import android.content.Context;
 import android.util.AttributeSet;
 import android.view.View;
@@ -29,7 +28,6 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import com.android.settingslib.Utils;
 import com.android.systemui.res.R;
 import com.android.wm.shell.animation.Interpolators;
 
@@ -51,9 +49,8 @@ public class TapAgainView extends TextView {
     }
 
     void updateColor() {
-        final @ColorInt int onSurface = Utils.getColorAttrDefaultColor(mContext,
-                com.android.internal.R.attr.materialColorOnSurface);
-        setTextColor(onSurface);
+        int textColor = getResources().getColor(R.color.notif_pill_text, mContext.getTheme());
+        setTextColor(textColor);
         setBackground(getResources().getDrawable(R.drawable.rounded_bg_full, mContext.getTheme()));
     }
 
