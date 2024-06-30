@@ -5750,7 +5750,7 @@ public class Notification implements Parcelable
                 pillColor = Colors.flattenAlpha(
                         getColors(p).getTertiaryFixedDimAccentColor(), bgColor);
                 textColor = Colors.flattenAlpha(
-                        getColors(p).getOnTertiaryFixedAccentTextColor(), pillColor);
+                        getColors(p).getOnTertiaryAccentTextColor(), pillColor);
             }
             contentView.setInt(R.id.expand_button, "setHighlightTextColor", textColor);
             contentView.setInt(R.id.expand_button, "setHighlightPillColor", pillColor);
