@@ -16,8 +16,6 @@
 
 package com.android.systemui.statusbar.notification.row;
 
-import static com.android.systemui.Flags.notificationColorUpdateLogger;
-
 import android.animation.AnimatorListenerAdapter;
 import android.content.Context;
 import android.content.res.Configuration;
@@ -56,8 +54,8 @@ import java.util.List;
 public abstract class ExpandableView extends FrameLayout implements Dumpable, Roundable {
     private static final String TAG = "ExpandableView";
     /** whether the dump() for this class should include verbose details */
-    protected static final boolean DUMP_VERBOSE = Compile.IS_DEBUG
-            && (Log.isLoggable(TAG, Log.VERBOSE) || notificationColorUpdateLogger());
+    protected static final boolean DUMP_VERBOSE =
+            Compile.IS_DEBUG && Log.isLoggable(TAG, Log.VERBOSE);
 
     private RoundableState mRoundableState = null;
     protected OnHeightChangedListener mOnHeightChangedListener;

@@ -23,7 +23,6 @@ import com.android.keyguard.KeyguardUpdateMonitor
 import com.android.keyguard.KeyguardUpdateMonitorCallback
 import com.android.systemui.statusbar.NotificationLockscreenUserManager
 import com.android.systemui.statusbar.NotificationLockscreenUserManager.UserChangedListener
-import com.android.systemui.statusbar.notification.ColorUpdateLogger
 import com.android.systemui.statusbar.notification.collection.NotifPipeline
 import com.android.systemui.statusbar.notification.collection.coordinator.dagger.CoordinatorScope
 import com.android.systemui.statusbar.notification.row.NotificationGutsManager
@@ -42,8 +41,7 @@ class ViewConfigCoordinator @Inject internal constructor(
     private val mConfigurationController: ConfigurationController,
     private val mLockscreenUserManager: NotificationLockscreenUserManager,
     private val mGutsManager: NotificationGutsManager,
-    private val mKeyguardUpdateMonitor: KeyguardUpdateMonitor,
-    private val colorUpdateLogger: ColorUpdateLogger,
+    private val mKeyguardUpdateMonitor: KeyguardUpdateMonitor
 ) : Coordinator, ConfigurationController.ConfigurationListener {
 
     private var mIsSwitchingUser = false
@@ -53,13 +51,11 @@ class ViewConfigCoordinator @Inject internal constructor(
 
     private val mKeyguardUpdateCallback = object : KeyguardUpdateMonitorCallback() {
         override fun onUserSwitching(userId: Int) {
-            colorUpdateLogger.logTriggerEvent("VCC.mKeyguardUpdateCallback.onUserSwitching()")
             log { "ViewConfigCoordinator.onUserSwitching(userId=$userId)" }
             mIsSwitchingUser = true
         }
 
         override fun onUserSwitchComplete(userId: Int) {
-            colorUpdateLogger.logTriggerEvent("VCC.mKeyguardUpdateCallback.onUserSwitchComplete()")
             log { "ViewConfigCoordinator.onUserSwitchComplete(userId=$userId)" }
             mIsSwitchingUser = false
             applyChangesOnUserSwitched()
@@ -68,7 +64,6 @@ class ViewConfigCoordinator @Inject internal constructor(
 
     private val mUserChangedListener = object : UserChangedListener {
         override fun onUserChanged(userId: Int) {
-            colorUpdateLogger.logTriggerEvent("VCC.mUserChangedListener.onUserChanged()")
             log { "ViewConfigCoordinator.onUserChanged(userId=$userId)" }
             applyChangesOnUserSwitched()
         }
@@ -82,7 +77,6 @@ class ViewConfigCoordinator @Inject internal constructor(
     }
 
     override fun onDensityOrFontScaleChanged() {
-        colorUpdateLogger.logTriggerEvent("VCC.onDensityOrFontScaleChanged()")
         log {
             val keyguardIsSwitchingUser = mKeyguardUpdateMonitor.isSwitchingUser
             "ViewConfigCoordinator.onDensityOrFontScaleChanged()" +
@@ -99,7 +93,6 @@ class ViewConfigCoordinator @Inject internal constructor(
     }
 
     override fun onUiModeChanged() {
-        colorUpdateLogger.logTriggerEvent("VCC.onUiModeChanged()")
         log {
             val keyguardIsSwitchingUser = mKeyguardUpdateMonitor.isSwitchingUser
             "ViewConfigCoordinator.onUiModeChanged()" +
@@ -114,12 +107,10 @@ class ViewConfigCoordinator @Inject internal constructor(
     }
 
     override fun onThemeChanged() {
-        colorUpdateLogger.logTriggerEvent("VCC.onThemeChanged()")
         onDensityOrFontScaleChanged()
     }
 
     private fun applyChangesOnUserSwitched() {
-        colorUpdateLogger.logEvent("VCC.applyChangesOnUserSwitched()")
         if (mReinflateNotificationsOnUserSwitched) {
             updateNotificationsOnDensityOrFontScaleChanged()
             mReinflateNotificationsOnUserSwitched = false
@@ -131,8 +122,6 @@ class ViewConfigCoordinator @Inject internal constructor(
     }
 
     private fun updateNotificationsOnUiModeChanged() {
-        colorUpdateLogger.logEvent("VCC.updateNotificationsOnUiModeChanged()",
-                "mode=" + mConfigurationController.nightModeName)
         log { "ViewConfigCoordinator.updateNotificationsOnUiModeChanged()" }
         traceSection("updateNotifOnUiModeChanged") {
             mPipeline?.allNotifs?.forEach { entry ->
@@ -142,7 +131,6 @@ class ViewConfigCoordinator @Inject internal constructor(
     }
 
     private fun updateNotificationsOnDensityOrFontScaleChanged() {
-        colorUpdateLogger.logEvent("VCC.updateNotificationsOnDensityOrFontScaleChanged()")
         mPipeline?.allNotifs?.forEach { entry ->
             entry.onDensityOrFontScaleChanged()
             val exposedGuts = entry.areGutsExposed()
