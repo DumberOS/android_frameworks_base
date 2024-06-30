@@ -36,7 +36,6 @@ import com.android.internal.util.ContrastColorUtil;
 import com.android.settingslib.Utils;
 import com.android.systemui.Dumpable;
 import com.android.systemui.res.R;
-import com.android.systemui.util.DrawableDumpKt;
 
 import java.io.PrintWriter;
 import java.util.Arrays;
@@ -334,16 +333,6 @@ public class NotificationBackgroundView extends View implements Dumpable {
         pw.println("mActualHeight: " + mActualHeight);
         pw.println("mTintColor: " + hexColorString(mTintColor));
         pw.println("mRippleColor: " + hexColorString(mRippleColor));
-        pw.println("mBackground: " + DrawableDumpKt.dumpToString(mBackground));
-    }
-
-    /** create a concise dump of this view's colors */
-    public String toDumpString() {
-        return "<NotificationBackgroundView"
-                + " tintColor=" + hexColorString(mTintColor)
-                + " rippleColor=" + hexColorString(mRippleColor)
-                + " bgColor=" + DrawableDumpKt.getSolidColor(mBackground)
-                + ">";
-
+        pw.println("mBackground: " + mBackground);
     }
 }

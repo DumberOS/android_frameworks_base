@@ -43,7 +43,6 @@ class FakeConfigurationController @Inject constructor() : ConfigurationControlle
     }
 
     override fun isLayoutRtl(): Boolean = isRtl
-    override fun getNightModeName(): String = "undefined"
 }
 
 @Module

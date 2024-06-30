@@ -21,7 +21,6 @@ import static android.service.notification.NotificationListenerService.REASON_CA
 
 import static com.android.systemui.statusbar.notification.collection.NotificationEntry.DismissState.PARENT_DISMISSED;
 import static com.android.systemui.statusbar.notification.row.NotificationContentView.VISIBLE_TYPE_HEADSUP;
-import static com.android.systemui.util.ColorUtilKt.hexColorString;
 
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
@@ -86,7 +85,6 @@ import com.android.systemui.statusbar.RemoteInputController;
 import com.android.systemui.statusbar.SmartReplyController;
 import com.android.systemui.statusbar.StatusBarIconView;
 import com.android.systemui.statusbar.notification.AboveShelfChangedListener;
-import com.android.systemui.statusbar.notification.ColorUpdateLogger;
 import com.android.systemui.statusbar.notification.FeedbackIcon;
 import com.android.systemui.statusbar.notification.LaunchAnimationParameters;
 import com.android.systemui.statusbar.notification.NotificationFadeAware;
@@ -176,7 +174,6 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
     private Optional<BubblesManager> mBubblesManagerOptional;
     private MetricsLogger mMetricsLogger;
     private NotificationChildrenContainerLogger mChildrenContainerLogger;
-    private ColorUpdateLogger mColorUpdateLogger;
     private NotificationDismissibilityProvider mDismissibilityProvider;
     private FeatureFlags mFeatureFlags;
     private int mIconTransformContentShift;
@@ -451,7 +448,6 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
 
     /**
      * Sets animations running in the layouts of this row, including public, private, and children.
-     *
      * @param running whether the animations should be started running or stopped.
      */
     public void setAnimationRunning(boolean running) {
@@ -621,12 +617,6 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
 
     private void updateBackgroundColorsOfSelf() {
         super.updateBackgroundColors();
-        if (mColorUpdateLogger.isEnabled()) {
-            mColorUpdateLogger.logNotificationEvent("ENR.updateBackgroundColorsOfSelf()",
-                    mLoggingKey,
-                    "normalBgColor=" + hexColorString(getNormalBgColor())
-                            + " background=" + mBackgroundNormal.toDumpString());
-        }
     }
 
     @Override
@@ -1408,7 +1398,7 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
     }
 
     public void setContentBackground(int customBackgroundColor, boolean animate,
-            NotificationContentView notificationContentView) {
+                                     NotificationContentView notificationContentView) {
         if (getShowingLayout() == notificationContentView) {
             setTintColor(customBackgroundColor, animate);
         }
@@ -1477,7 +1467,7 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
     }
 
     /**
-     * @return if this entry should be kept in its parent during removal.
+     * @return  if this entry should be kept in its parent during removal.
      */
     public boolean keepInParentForDismissAnimation() {
         return mKeepInParentForDismissAnimation;
@@ -1824,7 +1814,6 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
             NotificationDismissibilityProvider dismissibilityProvider,
             MetricsLogger metricsLogger,
             NotificationChildrenContainerLogger childrenContainerLogger,
-            ColorUpdateLogger colorUpdateLogger,
             SmartReplyConstants smartReplyConstants,
             SmartReplyController smartReplyController,
             FeatureFlags featureFlags,
@@ -1863,7 +1852,6 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
         mNotificationGutsManager = gutsManager;
         mMetricsLogger = metricsLogger;
         mChildrenContainerLogger = childrenContainerLogger;
-        mColorUpdateLogger = colorUpdateLogger;
         mDismissibilityProvider = dismissibilityProvider;
         mFeatureFlags = featureFlags;
     }
@@ -2322,7 +2310,7 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
     }
 
     public Animator getTranslateViewAnimator(final float leftTarget,
-            AnimatorUpdateListener listener) {
+                                             AnimatorUpdateListener listener) {
         if (mTranslateAnim != null) {
             mTranslateAnim.cancel();
         }
@@ -2721,7 +2709,6 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
             return getCollapsedHeight();
         }
     }
-
     /**
      * @return {@code true} if the notification can show it's heads up layout. This is mostly true
      * except for legacy use cases.
@@ -2906,7 +2893,7 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
 
     @Override
     public void setHideSensitive(boolean hideSensitive, boolean animated, long delay,
-            long duration) {
+                                 long duration) {
         if (getVisibility() == GONE) {
             // If we are GONE, the hideSensitive parameter will not be calculated and always be
             // false, which is incorrect, let's wait until a real call comes in later.
