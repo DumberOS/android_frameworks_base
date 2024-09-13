@@ -25,6 +25,7 @@ phony {
         "DisplayCutoutEmulationCornerOverlay",
         "DisplayCutoutEmulationDoubleOverlay",
         "DisplayCutoutEmulationHoleOverlay",
+        "DisplayCutoutEmulationNoneOverlay",
         "DisplayCutoutEmulationTallOverlay",
         "DisplayCutoutEmulationWaterfallOverlay",
         "FontNotoSerifSourceOverlay",
