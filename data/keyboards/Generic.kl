@@ -122,12 +122,12 @@ key 99    SYSRQ
 key 100   ALT_RIGHT
 # key 101 "KEY_LINEFEED"
 key 102   MOVE_HOME
-key 103   DPAD_UP
+key 103   DPAD_UP WAKE
 key 104   PAGE_UP
 key 105   DPAD_LEFT
 key 106   DPAD_RIGHT
 key 107   MOVE_END
-key 108   DPAD_DOWN
+key 108   DPAD_DOWN WAKE
 key 109   PAGE_DOWN
 key 110   INSERT
 key 111   FORWARD_DEL
@@ -158,7 +158,7 @@ key 135   PASTE
 # key 136 "KEY_FIND"
 key 137   CUT
 # key 138 "KEY_HELP"
-key 139   MENU
+key 139   HOME
 key 140   CALCULATOR
 # key 141 "KEY_SETUP"
 key 142   SLEEP
@@ -188,10 +188,10 @@ key 165   MEDIA_PREVIOUS
 key 166   MEDIA_STOP
 key 167   MEDIA_RECORD
 key 168   MEDIA_REWIND
-key 169   CALL
+key 231   CALL
 # key 170 "KEY_ISO"
 key 171   MUSIC
-key 172   HOME
+# key 172   HOME
 key 173   REFRESH
 # key 174 "KEY_EXIT"
 # key 175 "KEY_MOVE"
@@ -309,7 +309,7 @@ key 332   STYLUS_BUTTON_SECONDARY
 
 
 # key 352 "KEY_OK"
-key 353   DPAD_CENTER
+key 352   DPAD_CENTER
 # key 354 "KEY_GOTO"
 # key 355 "KEY_CLEAR"
 # key 356 "KEY_POWER2"
@@ -418,7 +418,7 @@ key 484   B                 FUNCTION
 # key 503 KEY_BRL_DOT7
 # key 504 KEY_BRL_DOT8
 
-key 522   STAR
+key 227   STAR
 key 523   POUND
 key 580   APP_SWITCH
 key 582   VOICE_ASSIST
