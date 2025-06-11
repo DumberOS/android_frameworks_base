@@ -1540,6 +1540,10 @@
     -->
     <integer name="config_doubleTapOnHomeBehavior">0</integer>
 
+    <integer name="config_screenOffDpadBehavior">1</integer>
+    <integer name="config_musicPlayingDpadBehavior">1</integer>
+    <integer name="config_callActiveDpadBehavior">1</integer>
+
     <!-- Note: This setting is deprecated, please use
     config_screenBrightnessSettingMinimumFloat instead -->
     <integer name="config_screenBrightnessSettingMinimum">10</integer>
