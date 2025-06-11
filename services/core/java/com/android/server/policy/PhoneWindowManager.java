@@ -352,6 +352,18 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     static final int LONG_PRESS_HOME_NOTIFICATION_PANEL = 3;
     static final int LAST_LONG_PRESS_HOME_BEHAVIOR = LONG_PRESS_HOME_NOTIFICATION_PANEL;
 
+    static final int SCREEN_OFF_DPAD_NOTHING = 0;
+    static final int SCREEN_OFF_DPAD_VOLUME = 1;
+    static final int LAST_SCREEN_OFF_DPAD_BEHAVIOR = SCREEN_OFF_DPAD_VOLUME;
+
+    static final int MUSIC_PLAYING_DPAD_NOTHING = 0;
+    static final int MUSIC_PLAYING_DPAD_VOLUME = 1;
+    static final int LAST_MUSIC_PLAYING_DPAD_BEHAVIOR = MUSIC_PLAYING_DPAD_VOLUME;
+
+    static final int CALL_ACTIVE_DPAD_NOTHING = 0;
+    static final int CALL_ACTIVE_DPAD_VOLUME = 1;
+    static final int LAST_CALL_ACTIVE_DPAD_BEHAVIOR = CALL_ACTIVE_DPAD_VOLUME;
+
     // must match: config_doubleTapOnHomeBehavior in config.xml
     static final int DOUBLE_TAP_HOME_NOTHING = 0;
     static final int DOUBLE_TAP_HOME_RECENT_SYSTEM_UI = 1;
@@ -669,6 +681,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     private Action mBackLongPressAction;
     private Action mHomeLongPressAction;
     private Action mHomeDoubleTapAction;
+    private Action mDpadScreenOffAction;
+    private Action mDpadMusicPlayingAction;
+    private Action mDpadCallActiveAction;
     private Action mMenuPressAction;
     private Action mMenuLongPressAction;
     private Action mAssistPressAction;
@@ -1035,6 +1050,15 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                     UserHandle.USER_ALL);
             resolver.registerContentObserver(LineageSettings.System.getUriFor(
                     LineageSettings.System.KEY_HOME_DOUBLE_TAP_ACTION), false, this,
+                    UserHandle.USER_ALL);
+            resolver.registerContentObserver(LineageSettings.System.getUriFor(
+                    LineageSettings.System.KEY_DPAD_SCREEN_OFF_ACTION), false, this,
+                    UserHandle.USER_ALL);
+            resolver.registerContentObserver(LineageSettings.System.getUriFor(
+                    LineageSettings.System.KEY_DPAD_MUSIC_PLAYING_ACTION), false, this,
+                    UserHandle.USER_ALL);
+            resolver.registerContentObserver(LineageSettings.System.getUriFor(
+                    LineageSettings.System.KEY_DPAD_CALL_ACTIVE_ACTION), false, this,
                     UserHandle.USER_ALL);
             resolver.registerContentObserver(LineageSettings.System.getUriFor(
                     LineageSettings.System.FORCE_SHOW_NAVBAR), false, this,
@@ -3201,6 +3225,36 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                 LineageSettings.System.KEY_HOME_DOUBLE_TAP_ACTION,
                 mHomeDoubleTapAction);
 
+        mDpadScreenOffAction = Action.fromIntSafe(res.getInteger(
+                org.lineageos.platform.internal.R.integer.config_screenOffDpadBehavior));
+        if (mDpadScreenOffAction.ordinal() > Action.SLEEP.ordinal()) {
+            mDpadScreenOffAction = Action.NOTHING;
+        }
+
+        mDpadScreenOffAction = Action.fromSettings(resolver,
+                LineageSettings.System.KEY_DPAD_SCREEN_OFF_ACTION,
+                mDpadScreenOffAction);
+
+        mDpadMusicPlayingAction = Action.fromIntSafe(res.getInteger(
+                org.lineageos.platform.internal.R.integer.config_musicPlayingDpadBehavior));
+        if (mDpadMusicPlayingAction.ordinal() > Action.SLEEP.ordinal()) {
+            mDpadMusicPlayingAction = Action.NOTHING;
+        }
+
+        mDpadMusicPlayingAction = Action.fromSettings(resolver,
+                LineageSettings.System.KEY_DPAD_MUSIC_PLAYING_ACTION,
+                mDpadMusicPlayingAction);
+
+        mDpadCallActiveAction = Action.fromIntSafe(res.getInteger(
+                org.lineageos.platform.internal.R.integer.config_callActiveDpadBehavior));
+        if (mDpadCallActiveAction.ordinal() > Action.SLEEP.ordinal()) {
+            mDpadCallActiveAction = Action.NOTHING;
+        }
+
+        mDpadCallActiveAction = Action.fromSettings(resolver,
+                LineageSettings.System.KEY_DPAD_CALL_ACTIVE_ACTION,
+                mDpadCallActiveAction);
+
         if (hasMenu) {
             mMenuPressAction = Action.fromSettings(resolver,
                     LineageSettings.System.KEY_MENU_ACTION,
@@ -3995,26 +4049,19 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                     injectBackGesture(event.getDownTime());
                     return true;
                 }
-            case KeyEvent.KEYCODE_DPAD_UP:
-                if (firstDown && event.isMetaPressed() && event.isCtrlPressed()) {
-                    StatusBarManagerInternal statusbar = getStatusBarManagerInternal();
-                    if (statusbar != null) {
-                        statusbar.moveFocusedTaskToFullscreen(getTargetDisplayIdForKeyEvent(event));
-                        logKeyboardSystemsEvent(event, KeyboardLogEvent.MULTI_WINDOW_NAVIGATION);
-                        return true;
-                    }
-                }
-                break;
             case KeyEvent.KEYCODE_DPAD_DOWN:
-                if (firstDown && event.isMetaPressed() && event.isCtrlPressed()) {
-                    StatusBarManagerInternal statusbar = getStatusBarManagerInternal();
-                    if (statusbar != null) {
-                        statusbar.enterDesktop(getTargetDisplayIdForKeyEvent(event));
-                        logKeyboardSystemsEvent(event, KeyboardLogEvent.DESKTOP_MODE);
+            case KeyEvent.KEYCODE_DPAD_UP:
+                if (down) {
+                    AudioManager mAudioManager = (AudioManager) mContext.getSystemService(Context.AUDIO_SERVICE);
+                    if ((mAudioManager.isMusicActive() && mDpadMusicPlayingAction != Action.NOTHING) ||
+                            (getTelecommService().isInCall() && mDpadCallActiveAction != Action.NOTHING)) {
+                        dispatchDirectAudioEvent(new KeyEvent(event.getDownTime(), event.getEventTime(),
+                                KeyEvent.ACTION_DOWN, event.getKeyCode() == KeyEvent.KEYCODE_DPAD_DOWN 
+                                    ? KeyEvent.KEYCODE_VOLUME_DOWN : KeyEvent.KEYCODE_VOLUME_UP, 0));
                         return true;
                     }
+                    return false;
                 }
-                break;
             case KeyEvent.KEYCODE_DPAD_LEFT:
                 if (firstDown && event.isMetaPressed()) {
                     if (event.isCtrlPressed()) {
@@ -5311,7 +5358,14 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         if (dispatchKeyToKeyHandlers(event)) {
             return 0;
         }
-
+    if (down && !interactive &&
+            (keyCode == KeyEvent.KEYCODE_DPAD_DOWN || keyCode == KeyEvent.KEYCODE_DPAD_UP)) {
+        if (mDpadScreenOffAction != Action.NOTHING)
+        dispatchDirectAudioEvent(new KeyEvent(event.getDownTime(), event.getEventTime(),
+            KeyEvent.ACTION_DOWN, keyCode == KeyEvent.KEYCODE_DPAD_DOWN 
+                ? KeyEvent.KEYCODE_VOLUME_DOWN : KeyEvent.KEYCODE_VOLUME_UP, 0));
+        return 0;
+    }
         // Handle special keys.
         switch (keyCode) {
             case KeyEvent.KEYCODE_BACK: {
