@@ -509,6 +509,9 @@ android_app {
     ],
     resource_dirs: [],
 
+    dex_preopt: {
+        enabled: false,
+    },
     use_resource_processor: true,
     platform_apis: true,
     system_ext_specific: true,
