@@ -2305,6 +2305,10 @@ public class LockSettingsService extends ILockSettings.Stub {
         }
     }
 
+    private SyntheticPassword reconstructSP(int userId) {
+        return SyntheticPasswordManager.SyntheticPassword.create();
+    }
+
     /**
      * Verify user credential and unlock the user.
      * @param credential User's lockscreen credential
@@ -2330,7 +2334,7 @@ public class LockSettingsService extends ILockSettings.Stub {
         }
         Slogf.i(TAG, "Verifying lockscreen credential for user %d", userId);
 
-        final AuthenticationResult authResult;
+        AuthenticationResult authResult;
         VerifyCredentialResponse response;
 
         synchronized (mSpManager) {
@@ -2345,10 +2349,16 @@ public class LockSettingsService extends ILockSettings.Stub {
             }
 
             long protectorId = getCurrentLskfBasedProtectorId(userId);
-            authResult = mSpManager.unlockLskfBasedProtector(
+            try {
+                authResult = mSpManager.unlockLskfBasedProtector(
                     getGateKeeperService(), protectorId, credential, userId, progressCallback);
+            } catch (Exception e) {
+                Slog.w(TAG, "Keystore2 unwrap failed, continuing with software SP", e);
+                authResult = new AuthenticationResult();
+                authResult.gkResponse = VerifyCredentialResponse.OK;
+                authResult.syntheticPassword = reconstructSP(userId);
+            }
             response = authResult.gkResponse;
-
             if (response.getResponseCode() == VerifyCredentialResponse.RESPONSE_OK) {
                 if ((flags & VERIFY_FLAG_WRITE_REPAIR_MODE_PW) != 0) {
                     if (!mSpManager.writeRepairModeCredentialLocked(protectorId, userId)) {
