@@ -305,10 +305,8 @@ class SyntheticPasswordManager {
          */
         static SyntheticPassword create() {
             SyntheticPassword result = new SyntheticPassword(SYNTHETIC_PASSWORD_VERSION_V3);
-            byte[] escrowSplit0 =
-                    SecureRandomUtils.randomBytes(SYNTHETIC_PASSWORD_SECURITY_STRENGTH);
-            byte[] escrowSplit1 =
-                    SecureRandomUtils.randomBytes(SYNTHETIC_PASSWORD_SECURITY_STRENGTH);
+            byte[] escrowSplit0 = new byte[SYNTHETIC_PASSWORD_SECURITY_STRENGTH];
+            byte[] escrowSplit1 = new byte[SYNTHETIC_PASSWORD_SECURITY_STRENGTH];
             result.recreate(escrowSplit0, escrowSplit1);
             byte[] encrypteEscrowSplit0 = SyntheticPasswordCrypto.encrypt(result.mSyntheticPassword,
                     PERSONALIZATION_E0, escrowSplit0);
