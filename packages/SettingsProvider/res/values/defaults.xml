@@ -337,5 +337,5 @@
     <integer name="def_battery_charging_state_enforce_level">-1</integer>
 
     <!-- Value to use as default scale for fonts -->
-    <item name="def_device_font_scale" format="float" type="dimen">1.0</item>
+    <item name="def_device_font_scale" format="float" type="dimen">1.28</item>
 </resources>
