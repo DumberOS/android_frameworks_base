@@ -4050,11 +4050,23 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                     return true;
                 }
             case KeyEvent.KEYCODE_DPAD_DOWN:
+/*		if (longPress) {
+	            IStatusBarService statusBar = getStatusBarService();
+		    try {
+		        statusBar.expandNotificationsPanel();
+		    } catch (RemoteException ex) {
+    		Slog.e(TAG, "Error expanding panel", ex);
+		    }
+		    return true;
+		}*/
             case KeyEvent.KEYCODE_DPAD_UP:
                 if (down) {
                     AudioManager mAudioManager = (AudioManager) mContext.getSystemService(Context.AUDIO_SERVICE);
+                    TelecomManager telecomManager = getTelecommService();
+                    boolean isInCall = (telecomManager != null && telecomManager.isInCall()) ||
+                            getCurrentAudioMode() == AudioManager.MODE_IN_COMMUNICATION;
                     if ((mAudioManager.isMusicActive() && mDpadMusicPlayingAction != Action.NOTHING) ||
-                            (getTelecommService().isInCall() && mDpadCallActiveAction != Action.NOTHING)) {
+                            (isInCall && mDpadCallActiveAction != Action.NOTHING)) {
                         dispatchDirectAudioEvent(new KeyEvent(event.getDownTime(), event.getEventTime(),
                                 KeyEvent.ACTION_DOWN, event.getKeyCode() == KeyEvent.KEYCODE_DPAD_DOWN 
                                     ? KeyEvent.KEYCODE_VOLUME_DOWN : KeyEvent.KEYCODE_VOLUME_UP, 0));
@@ -5214,6 +5226,15 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         mDefaultDisplayPolicy.setHdmiPlugged(plugged, true /* force */);
     }
 
+    int getCurrentAudioMode() {
+        try {
+            return getAudioService().getMode();
+        } catch (Exception e) {
+            Log.e(TAG, "Error getting AudioService in interceptKeyBeforeQueueing.", e);
+        }
+	return AudioManager.MODE_NORMAL;
+    }
+
     // TODO(b/117479243): handle it in InputPolicy
     /** {@inheritDoc} */
     @Override
@@ -5463,14 +5484,8 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                             break;
                         }
                     }
-                    int audioMode = AudioManager.MODE_NORMAL;
-                    try {
-                        audioMode = getAudioService().getMode();
-                    } catch (Exception e) {
-                        Log.e(TAG, "Error getting AudioService in interceptKeyBeforeQueueing.", e);
-                    }
                     boolean isInCall = (telecomManager != null && telecomManager.isInCall()) ||
-                            audioMode == AudioManager.MODE_IN_COMMUNICATION;
+                            getCurrentAudioMode() == AudioManager.MODE_IN_COMMUNICATION;
                     if (isInCall && (result & ACTION_PASS_TO_USER) == 0) {
                         // If we are in call but we decided not to pass the key to
                         // the application, just pass it to the session service.
