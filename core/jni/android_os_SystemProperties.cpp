@@ -81,6 +81,18 @@ void ReadProperty(JNIEnv* env, jstring keyJ, Functor&& functor)
 jstring SystemProperties_getSS(JNIEnv* env, jclass clazz, jstring keyJ,
                                jstring defJ)
 {
+// ----- BEGIN BOOTLOADER-SPOOF PATCH -----
+    const char* key = env->GetStringUTFChars(keyJ, nullptr);
+    if (strcmp(key, "ro.boot.flash.locked") == 0) {
+        env->ReleaseStringUTFChars(keyJ, key);
+        return env->NewStringUTF("1");
+    }
+    if (strcmp(key, "ro.boot.verifiedbootstate") == 0) {
+        env->ReleaseStringUTFChars(keyJ, key);
+        return env->NewStringUTF("green");
+    }
+    env->ReleaseStringUTFChars(keyJ, key);
+    // ----- END BOOTLOADER-SPOOF PATCH -----
     jstring ret = defJ;
     ReadProperty(env, keyJ, [&](const char* value) {
         if (value[0]) {
