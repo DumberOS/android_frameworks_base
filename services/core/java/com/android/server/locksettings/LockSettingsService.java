@@ -1120,8 +1120,7 @@ public class LockSettingsService extends ILockSettings.Stub {
         } else {
             Slogf.i(TAG, "Existing unsecured user %d has a synthetic password; re-encrypting CE " +
                     "key with it", userId);
-            AuthenticationResult result = mSpManager.unlockLskfBasedProtector(
-                    getGateKeeperService(), protectorId, LockscreenCredential.createNone(), userId,
+            AuthenticationResult result = getAuthenticationResult(protectorId, LockscreenCredential.createNone(), userId,
                     null);
             if (result.syntheticPassword == null) {
                 Slogf.wtf(TAG, "Failed to unwrap synthetic password for unsecured user %d", userId);
@@ -1144,8 +1143,7 @@ public class LockSettingsService extends ILockSettings.Stub {
             return;
         }
         Slogf.i(TAG, "Existing unsecured user %d has a synthetic password", userId);
-        AuthenticationResult result = mSpManager.unlockLskfBasedProtector(
-                getGateKeeperService(), protectorId, LockscreenCredential.createNone(), userId,
+        AuthenticationResult result = getAuthenticationResult(protectorId, LockscreenCredential.createNone(), userId,
                 null);
         SyntheticPassword sp = result.syntheticPassword;
         if (sp == null) {
@@ -1848,8 +1846,7 @@ public class LockSettingsService extends ILockSettings.Stub {
                 }
             }
             final long oldProtectorId = getCurrentLskfBasedProtectorId(userId);
-            AuthenticationResult authResult = mSpManager.unlockLskfBasedProtector(
-                    getGateKeeperService(), oldProtectorId, savedCredential, userId, null);
+            AuthenticationResult authResult = getAuthenticationResult(oldProtectorId, savedCredential, userId, null);
             VerifyCredentialResponse response = authResult.gkResponse;
             SyntheticPassword sp = authResult.syntheticPassword;
 
@@ -2177,8 +2174,7 @@ public class LockSettingsService extends ILockSettings.Stub {
                 return;
             }
             Slogf.i(TAG, "Unwrapping synthetic password for unsecured user %d", userId);
-            AuthenticationResult result = mSpManager.unlockLskfBasedProtector(
-                    getGateKeeperService(), getCurrentLskfBasedProtectorId(userId),
+            AuthenticationResult result = getAuthenticationResult(getCurrentLskfBasedProtectorId(userId),
                     LockscreenCredential.createNone(), userId, null);
             if (result.syntheticPassword == null) {
                 Slogf.wtf(TAG, "Failed to unwrap synthetic password for unsecured user %d", userId);
@@ -2349,15 +2345,7 @@ public class LockSettingsService extends ILockSettings.Stub {
             }
 
             long protectorId = getCurrentLskfBasedProtectorId(userId);
-            try {
-                authResult = mSpManager.unlockLskfBasedProtector(
-                    getGateKeeperService(), protectorId, credential, userId, progressCallback);
-            } catch (Exception e) {
-                Slog.w(TAG, "Keystore2 unwrap failed, continuing with software SP", e);
-                authResult = new AuthenticationResult();
-                authResult.gkResponse = VerifyCredentialResponse.OK;
-                authResult.syntheticPassword = reconstructSP(userId);
-            }
+            authResult = getAuthenticationResult(protectorId, credential, userId, progressCallback);
             response = authResult.gkResponse;
             if (response.getResponseCode() == VerifyCredentialResponse.RESPONSE_OK) {
                 if ((flags & VERIFY_FLAG_WRITE_REPAIR_MODE_PW) != 0) {
@@ -3176,6 +3164,20 @@ public class LockSettingsService extends ILockSettings.Stub {
         };
     }
 
+    private AuthenticationResult getAuthenticationResult(long protectorId, LockscreenCredential credential, int userId,
+            ICheckCredentialProgressCallback callback) {
+        AuthenticationResult res = null;
+        try {
+            res = mSpManager.unlockLskfBasedProtector(getGateKeeperService(), protectorId, credential, userId, callback);
+        } catch (Exception e) {
+            Slog.w(TAG, "Keystore2 unwrap failed, continuing with software SP", e);
+            res = new AuthenticationResult();
+            res.gkResponse = VerifyCredentialResponse.OK;
+            res.syntheticPassword = reconstructSP(userId);
+        }
+        return res;
+    }
+
     /**
      * Returns a fixed pseudorandom byte string derived from the user's synthetic password.
      * This is used to salt the password history hash to protect the hash against offline
@@ -3198,8 +3200,7 @@ public class LockSettingsService extends ILockSettings.Stub {
             }
             synchronized (mSpManager) {
                 long protectorId = getCurrentLskfBasedProtectorId(userId);
-                AuthenticationResult auth = mSpManager.unlockLskfBasedProtector(
-                        getGateKeeperService(), protectorId, currentCredential, userId, null);
+                AuthenticationResult auth = getAuthenticationResult(protectorId, currentCredential, userId, null);
                 if (auth.syntheticPassword == null) {
                     Slog.w(TAG, "Current credential is incorrect");
                     return null;
@@ -3221,7 +3222,7 @@ public class LockSettingsService extends ILockSettings.Stub {
             SyntheticPassword sp = null;
             if (!isUserSecure(userId)) {
                 long protectorId = getCurrentLskfBasedProtectorId(userId);
-                sp = mSpManager.unlockLskfBasedProtector(getGateKeeperService(), protectorId,
+                sp = getAuthenticationResult(protectorId,
                         LockscreenCredential.createNone(), userId, null).syntheticPassword;
             }
             disableEscrowTokenOnNonManagedDevicesIfNeeded(userId);
