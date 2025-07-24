@@ -245,28 +245,7 @@ public class NavigationBarControllerImpl implements
     }
 
     private boolean shouldCreateNavBarAndTaskBar(Context context, int displayId) {
-        if (displayId == mDisplayTracker.getDefaultDisplayId() &&
-                LineageSettings.System.getIntForUser(context.getContentResolver(),
-                        LineageSettings.System.FORCE_SHOW_NAVBAR, 0,
-                        UserHandle.USER_CURRENT) == 1) {
-            return true;
-        }
-
-        if (mHasNavBar.indexOfKey(displayId) > -1) {
-            return mHasNavBar.get(displayId);
-        }
-
-        final IWindowManager wms = WindowManagerGlobal.getWindowManagerService();
-
-        try {
-            boolean hasNavigationBar = wms.hasNavigationBar(displayId);
-            mHasNavBar.put(displayId, hasNavigationBar);
-            return hasNavigationBar;
-        } catch (RemoteException e) {
-            // Cannot get wms, just return false with warning message.
-            Log.w(TAG, "Cannot get WindowManager.");
-            return false;
-        }
+	   return false;
     }
 
     /** @see #initializeTaskbarIfNecessary() */
