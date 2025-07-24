@@ -681,9 +681,11 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     private Action mBackLongPressAction;
     private Action mHomeLongPressAction;
     private Action mHomeDoubleTapAction;
+    private int mPowerButtonAction;
     private Action mDpadScreenOffAction;
     private Action mDpadMusicPlayingAction;
     private Action mDpadCallActiveAction;
+    private Action mPowerSinglePressAction;
     private Action mMenuPressAction;
     private Action mMenuLongPressAction;
     private Action mAssistPressAction;
@@ -1052,6 +1054,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                     LineageSettings.System.KEY_HOME_DOUBLE_TAP_ACTION), false, this,
                     UserHandle.USER_ALL);
             resolver.registerContentObserver(LineageSettings.System.getUriFor(
+                    LineageSettings.System.KEY_POWER_BUTTON_ACTION), false, this,
+                    UserHandle.USER_ALL);
+            resolver.registerContentObserver(LineageSettings.System.getUriFor(
                     LineageSettings.System.KEY_DPAD_SCREEN_OFF_ACTION), false, this,
                     UserHandle.USER_ALL);
             resolver.registerContentObserver(LineageSettings.System.getUriFor(
@@ -1340,6 +1345,14 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         } else if (count > 3 && count <= getMaxMultiPressPowerCount()) {
             Slog.d(TAG, "No behavior defined for power press count " + count);
         } else if (count == 1 && shouldHandleShortPressPowerAction(interactive, eventTime)) {
+            if (isNotificationPanelExpanded()) {
+                collapseNotificationPanel();
+                return;
+            }
+            if (!isOnHomeScreen() && mPowerButtonAction != 0) {
+                shortPressPowerGoHome();
+                return;
+            }
             switch (mShortPressOnPowerBehavior) {
                 case SHORT_PRESS_POWER_NOTHING:
                     break;
@@ -1499,6 +1512,58 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             // device will not power off and only launch home.
             mKeyguardDelegate.onShortPowerPressedGoHome();
         }
+    }
+
+    /** Returns true if the notification panel is expanded. */
+    private boolean isNotificationPanelExpanded() {
+	return false;
+/*        StatusBarManagerInternal statusBar = getStatusBarManagerInternal();
+        return statusBar != null && statusBar.isNotificationPanelExpanded();*/
+    }
+
+    /** Collapses the notification panel if it is expanded. */
+    private void collapseNotificationPanel() {
+        IStatusBarService statusBar = getStatusBarService();
+        if (statusBar != null) {
+            try {
+                statusBar.collapsePanels();
+            } catch (RemoteException e) {
+                // Ignore
+            }
+        }
+    }
+
+    /**
+     * Returns true if the currently focused activity is the default home
+     * activity or the keyguard is showing.
+     */
+    private boolean isOnHomeScreen() {
+        if (isKeyguardShowingAndNotOccluded()) {
+            return true;
+        }
+	if (mRecentsVisible) {
+	    return false;
+	}
+        try {
+            RootTaskInfo info = mActivityManagerService.getFocusedRootTaskInfo();
+            if (info == null || info.topActivity == null) {
+                return false;
+            }
+            ResolveInfo homeInfo = mPackageManager.resolveActivityAsUser(
+                    mHomeIntent,
+                    PackageManager.MATCH_DEFAULT_ONLY | PackageManager.GET_META_DATA,
+                    mCurrentUserId);
+            if (homeInfo == null || homeInfo.activityInfo == null) {
+                return false;
+            }
+            ComponentName homeComponent = new ComponentName(
+                    homeInfo.activityInfo.packageName,
+                    homeInfo.activityInfo.name);
+            return homeComponent.equals(info.topActivity);
+        } catch (RemoteException e) {
+            Slog.e(TAG, "isOnHomeScreen: failed to get focused task info", e);
+        }
+        return false;
     }
 
     private void powerMultiPressAction(long eventTime, boolean interactive, int behavior) {
@@ -3224,6 +3289,15 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         mHomeDoubleTapAction = Action.fromSettings(resolver,
                 LineageSettings.System.KEY_HOME_DOUBLE_TAP_ACTION,
                 mHomeDoubleTapAction);
+
+        mPowerButtonAction = res.getInteger(
+                org.lineageos.platform.internal.R.integer.config_powerButtonBehavior);
+        if (mPowerButtonAction > 1) {
+            mPowerButtonAction = 0;
+        }
+
+        mPowerButtonAction = LineageSettings.System.getIntForUser(resolver,
+                    LineageSettings.System.KEY_POWER_BUTTON_ACTION, mPowerButtonAction, UserHandle.USER_CURRENT);
 
         mDpadScreenOffAction = Action.fromIntSafe(res.getInteger(
                 org.lineageos.platform.internal.R.integer.config_screenOffDpadBehavior));
