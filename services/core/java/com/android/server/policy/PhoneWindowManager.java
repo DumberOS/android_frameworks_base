@@ -2292,12 +2292,43 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         performKeyAction(action, event, AssistUtils.INVOCATION_TYPE_UNKNOWN);
     }
 
+    private void closeSettingsPanel() {
+        Intent i = new Intent("eu.dumbdroid.settingspanel.CLOSE_PANEL");
+        mContext.sendBroadcastAsUser(i, UserHandle.CURRENT);
+    }
+
+    private void launchSettingsPanel() {
+        Intent intent = new Intent(Intent.ACTION_MAIN)
+            .setComponent(new ComponentName(
+                        "eu.dumbdroid.settingspanel",
+                        "eu.dumbdroid.settingspanel.MainActivity"))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                    | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        // Use UserHandle.CURRENT or ALL depending on multi‑user support
+        mContext.startActivityAsUser(intent, UserHandle.CURRENT);
+    }
+
+    private boolean isSettingsPanelOn() {
+        ActivityManager am = (ActivityManager) mContext.getSystemService(Context.ACTIVITY_SERVICE);
+        // NOTE: getRunningTasks is deprecated for apps but still available in system code
+        List<ActivityManager.RunningTaskInfo> tasks = am.getRunningTasks(1);
+        if (!tasks.isEmpty()) {
+            ComponentName top = tasks.get(0).topActivity;
+            return "eu.dumbdroid.settingspanel".equals(top.getPackageName())
+                && "eu.dumbdroid.settingspanel.MainActivity".equals(top.getClassName());
+        }
+        return false;
+    }
+
     private void performKeyAction(Action action, KeyEvent event, int assistInvocationType) {
         switch (action) {
             case NOTHING:
                 break;
             case MENU:
-                triggerVirtualKeypress(KeyEvent.KEYCODE_MENU);
+                if (isSettingsPanelOn())
+                    closeSettingsPanel();
+                else
+                    launchSettingsPanel();
                 break;
             case APP_SWITCH:
                 toggleRecentApps();
@@ -2312,7 +2343,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                 launchVoiceAssistWithWakeLock();
                 break;
             case IN_APP_SEARCH:
-                triggerVirtualKeypress(KeyEvent.KEYCODE_SEARCH);
+                triggerVirtualKeypress(KeyEvent.KEYCODE_HOME);
                 break;
             case LAUNCH_CAMERA:
                 launchCameraAction();
