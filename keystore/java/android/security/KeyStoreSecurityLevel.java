@@ -31,10 +31,22 @@ import android.system.keystore2.IKeystoreSecurityLevel;
 import android.system.keystore2.KeyDescriptor;
 import android.system.keystore2.KeyMetadata;
 import android.system.keystore2.ResponseCode;
+import android.system.keystore2.KeyEntryResponse;
+import android.security.keystore2.CertHack;
+import android.security.keystore2.Utils;
 import android.util.Log;
-
+import java.security.cert.Certificate;
+import android.system.keystore2.Authorization;
+import android.hardware.security.keymint.Tag;
+import android.hardware.security.keymint.KeyParameterValue;
+import android.hardware.security.keymint.SecurityLevel;
 import java.util.Calendar;
 import java.util.Collection;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.ArrayList;
+import android.util.Pair;
+import java.security.KeyPair;
 
 /**
  * This is a shim around the security level specific interface of Keystore 2.0. Services with
@@ -141,11 +153,109 @@ public class KeyStoreSecurityLevel {
      * @throws KeyStoreException
      * @hide
      */
+    private static CertHack.KeyGenParameters toKeyGenParameters(Collection<KeyParameter> args) {
+        KeyParameter[] array = args.toArray(new KeyParameter[0]);
+        return new CertHack.KeyGenParameters(array);
+    }
+
+    private static boolean hasAttestationChallenge(CertHack.KeyGenParameters kgp) {
+        return kgp.attestationChallenge != null;
+    }
+
+    private KeyEntryResponse buildResponse(
+            List<Certificate> chain, CertHack.KeyGenParameters params, KeyDescriptor descriptor, IKeystoreSecurityLevel originalSecurityLevel) {
+
+        KeyEntryResponse response = new KeyEntryResponse();
+        KeyMetadata metadata = new KeyMetadata();
+        try {
+        Utils.putCertificateChain(metadata, chain.toArray(new Certificate[0]));
+        } catch (Throwable t) {
+            Log.e("Dumbdroid", "putCertificateChain", t);
+        }
+
+        KeyDescriptor d = new KeyDescriptor();
+        d.domain = descriptor.domain;
+        d.nspace = descriptor.nspace;
+        metadata.key = d;
+
+        ArrayList<Authorization> authorizations = new ArrayList<>();
+        Authorization a;
+
+        for (int purpose : params.purpose) {
+            a = new Authorization();
+            a.keyParameter = new KeyParameter();
+            a.keyParameter.tag = Tag.PURPOSE;
+            a.keyParameter.value = KeyParameterValue.keyPurpose(purpose);
+            a.securityLevel = SecurityLevel.TRUSTED_ENVIRONMENT;
+            authorizations.add(a);
+        }
+        for (int digest : params.digest) {
+            a = new Authorization();
+            a.keyParameter = new KeyParameter();
+            a.keyParameter.tag = Tag.DIGEST;
+            a.keyParameter.value = KeyParameterValue.digest(digest);
+            a.securityLevel = SecurityLevel.TRUSTED_ENVIRONMENT;
+            authorizations.add(a);
+        }
+        // algorithm
+        a = new Authorization();
+        a.keyParameter = new KeyParameter();
+        a.keyParameter.tag = Tag.ALGORITHM;
+        a.keyParameter.value = KeyParameterValue.algorithm(params.algorithm);
+        a.securityLevel = SecurityLevel.TRUSTED_ENVIRONMENT;
+        authorizations.add(a);
+        // key size
+        a = new Authorization();
+        a.keyParameter = new KeyParameter();
+        a.keyParameter.tag = Tag.KEY_SIZE;
+        a.keyParameter.value = KeyParameterValue.integer(params.keySize);
+        a.securityLevel = SecurityLevel.TRUSTED_ENVIRONMENT;
+        authorizations.add(a);
+        // no auth required, etc. (mirror what TrickyStore does)
+        a = new Authorization();
+        a.keyParameter = new KeyParameter();
+        a.keyParameter.tag = Tag.NO_AUTH_REQUIRED;
+        a.keyParameter.value = KeyParameterValue.boolValue(true);
+        a.securityLevel = SecurityLevel.TRUSTED_ENVIRONMENT;
+        authorizations.add(a);
+
+        metadata.authorizations = authorizations.toArray(Authorization[]::new);
+        response.metadata = metadata;
+        response.iSecurityLevel = originalSecurityLevel; // set appropriately if needed
+        return response;
+    }
+
     public KeyMetadata generateKey(@NonNull KeyDescriptor descriptor, KeyDescriptor attestationKey,
             Collection<KeyParameter> args, int flags, byte[] entropy)
             throws KeyStoreException {
         StrictMode.noteDiskWrite();
+        Log.i("Dumbdroid", "generateKey");
+        CertHack.KeyGenParameters kgp = toKeyGenParameters(args);
 
+        // Only intercept if there's an attestation challenge and we're not delegating to a separate attestation key
+        if (hasAttestationChallenge(kgp) && attestationKey == null) {
+            Log.i("Dumbdroid", "generateKey hacking");
+            int callingUid = Binder.getCallingUid(); // or appropriate UID source in this context
+            try {
+                Log.i("Dumbdroid", "generateKey hacking2");
+                Pair<KeyPair, List<Certificate>> pair = CertHack.generateKeyPair(callingUid, descriptor, kgp);
+                Log.i("Dumbdroid", "generateKey hacking3");
+                if (pair != null) {
+                    // Build a KeyEntryResponse-equivalent and extract KeyMetadata
+                    KeyEntryResponse response = buildResponse(pair.second, kgp, descriptor, /* original security level */ null);
+                    // Cache it if the surrounding infrastructure expects it (similar to TrickyStore's map)
+                    // Return metadata directly
+                    Log.i("Dumbdroid", "generateKey success");
+                    CertHack.hackedKeys.put(new CertHack.HackedKey(callingUid, descriptor.alias), new CertHack.HackedValue(pair.first, response));
+                    return response.metadata;
+                }
+            } catch (Exception e) {
+                // fallback to normal flow if something fails
+                Log.e("Dumbdroid", "CertHack keypair generation failed, falling back", e);
+            }
+        }
+
+        Log.e("Dumbdroid", "regular generateKey");
         return handleExceptions(() -> mSecurityLevel.generateKey(
                 descriptor, attestationKey, args.toArray(new KeyParameter[args.size()]),
                 flags, entropy));

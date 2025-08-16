@@ -178,6 +178,23 @@ public class AndroidKeyStoreSpi extends KeyStoreSpi {
 
     @Override
     public Certificate[] engineGetCertificateChain(String alias) {
+        int callingUid = android.os.Binder.getCallingUid(); // get the UID of the caller
+
+        // First: check if we have a pre-generated / hacked response cached
+        CertHack.HackedKey hackedKey = new CertHack.HackedKey(callingUid, alias);
+        CertHack.HackedValue hackedValue = CertHack.hackedKeys.get(hackedKey); // adjust access if static vs instance
+        Log.w("Dumbdroid", "Will try using cached chain");
+        if (hackedValue != null && hackedValue.response() != null) {
+            // Directly return the chain from the cached response
+            Certificate[] cachedChain = Utils.getCertificateChain(hackedValue.response());
+            Log.w("Dumbdroid", "Will try using cached chain2");
+            if (cachedChain != null) {
+                Log.w("Dumbdroid", "Will try using cached chain: SUCCESS");
+                return cachedChain;
+            }
+            Log.w("Dumbdroid", "Will try using cached chain: FAIL");
+            // fallthrough if something is unexpectedly null
+        }
         KeyEntryResponse response = getKeyMetadata(alias);
 
         if (response == null || response.metadata.certificate == null) {
@@ -208,7 +225,8 @@ public class AndroidKeyStoreSpi extends KeyStoreSpi {
         }
 
         caList[0] = leaf;
-
+	if (CertHack.canHack())
+            return CertHack.hackCertificateChain(caList);
         return caList;
     }
 
