@@ -36,12 +36,14 @@ import android.graphics.Rect;
 import android.util.AttributeSet;
 import android.view.KeyEvent;
 import android.view.View;
+import android.util.Log;
 
 import androidx.annotation.CallSuper;
 
 import com.android.app.animation.Interpolators;
 import com.android.internal.widget.LockscreenCredential;
 import com.android.systemui.res.R;
+import com.android.systemui.keyguard.domain.interactor.PendingPinInput;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -92,8 +94,18 @@ public abstract class KeyguardPinBasedInputView extends KeyguardAbsKeyInputView 
         }
     }
 
+    private boolean mConsumeBackKeyUp = false;
+
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_BACK) {
+            if (mPasswordEntry.getText().length() > 0 && mPasswordEntry.isEnabled()) {
+                mPasswordEntry.deleteLastChar();
+		mConsumeBackKeyUp = true;
+                return true;
+            }
+            return super.onKeyDown(keyCode, event);
+        }
         if (keyCode == KeyEvent.KEYCODE_DEL) {
             mDeleteButton.performClick();
             return true;
@@ -113,6 +125,10 @@ public abstract class KeyguardPinBasedInputView extends KeyguardAbsKeyInputView 
 
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_BACK && mConsumeBackKeyUp) {
+            mConsumeBackKeyUp = false;
+            return true;
+	}
         if (KeyEvent.isConfirmKey(keyCode)) {
             mOkButton.performClick();
             return true;
@@ -160,6 +176,7 @@ public abstract class KeyguardPinBasedInputView extends KeyguardAbsKeyInputView 
 
     @Override
     protected void resetPasswordText(boolean animate, boolean announce) {
+	PendingPinInput.reset();
         mPasswordEntry.reset(animate, announce);
     }
 
