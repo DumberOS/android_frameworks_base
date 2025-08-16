@@ -32,6 +32,8 @@ import com.android.systemui.flags.Flags;
 import com.android.systemui.res.R;
 import com.android.systemui.statusbar.policy.DevicePostureController;
 import com.android.systemui.user.domain.interactor.SelectedUserInteractor;
+import com.android.systemui.keyguard.domain.interactor.PendingPinInput;
+import android.util.Log;
 
 public class KeyguardPinViewController
         extends KeyguardPinBasedInputViewController<KeyguardPINView> {
@@ -74,6 +76,18 @@ public class KeyguardPinViewController
         mBackspaceKey = view.findViewById(R.id.delete_button);
         mPinLength = mLockPatternUtils.getPinLength(selectedUserInteractor.getSelectedUserId());
         mUiEventLogger = uiEventLogger;
+    }
+
+    @Override
+    public void onResume(int reason) {
+        super.onResume(reason);
+        String pending = PendingPinInput.get();
+        Log.i("Dumbdroid", "KeyguardPinViewControlelr onResume \"" + mPasswordEntry.getText() + "\" + \"" + pending);
+        for (int i = 0; i < pending.length(); i++) {
+            mPasswordEntry.append(pending.charAt(i));
+        }
+	Log.i("Dumbdroid", "After append \"" + mPasswordEntry.getText() + "\"");
+
     }
 
     @Override

@@ -16,9 +16,13 @@
 
 package com.android.systemui.keyguard.domain.interactor
 
+import android.util.Log
 import android.content.Context
 import android.media.AudioManager
 import android.view.KeyEvent
+import com.android.systemui.keyguard.domain.interactor.PendingPinInput
+import com.android.keyguard.KeyguardSecurityModel
+import com.android.systemui.user.domain.interactor.SelectedUserInteractor
 import com.android.systemui.back.domain.interactor.BackActionInteractor
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.keyevent.domain.interactor.SysUIKeyEventHandler.Companion.handleAction
@@ -44,6 +48,8 @@ constructor(
     private val mediaSessionLegacyHelperWrapper: MediaSessionLegacyHelperWrapper,
     private val backActionInteractor: BackActionInteractor,
     private val powerInteractor: PowerInteractor,
+    private val keyguardSecurityModel: KeyguardSecurityModel,
+    private val selectedUserInteractor: SelectedUserInteractor,
 ) {
 
     fun dispatchKeyEvent(event: KeyEvent): Boolean {
@@ -63,6 +69,14 @@ constructor(
             when (event.keyCode) {
                 KeyEvent.KEYCODE_MENU -> return dispatchMenuKeyEvent()
             }
+        }
+        if (shouldShowPinBouncer(event)) {
+            digitFromKey(event)?.let {
+		PendingPinInput.addDigit(it)
+		Log.i("Dumbdroid", "Adding digit " + it)
+		}
+            statusBarKeyguardViewManager.showPrimaryBouncer(true)
+            return true
         }
         return false
     }
@@ -128,4 +142,28 @@ constructor(
     private fun isDeviceAwake(): Boolean {
         return powerInteractor.detailedWakefulness.value.isAwake()
     }
+    private fun digitFromKey(event: KeyEvent): Char? {
+        return when (event.keyCode) {
+            in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 ->
+                '0' + (event.keyCode - KeyEvent.KEYCODE_0)
+            in KeyEvent.KEYCODE_NUMPAD_0..KeyEvent.KEYCODE_NUMPAD_9 ->
+                '0' + (event.keyCode - KeyEvent.KEYCODE_NUMPAD_0)
+            else -> null
+        }
+    }
+
+    private fun shouldShowPinBouncer(event: KeyEvent): Boolean {
+        if (event.action != KeyEvent.ACTION_DOWN) return false
+        if (statusBarStateController.state != StatusBarState.KEYGUARD) return false
+        if (!isDeviceAwake()) return false
+        if (statusBarKeyguardViewManager.primaryBouncerIsOrWillBeShowing()) return false
+
+        val mode = keyguardSecurityModel.getSecurityMode(selectedUserInteractor.getSelectedUserId())
+        if (mode != KeyguardSecurityModel.SecurityMode.PIN) return false
+
+        val code = event.keyCode
+        return (code in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9) ||
+            (code in KeyEvent.KEYCODE_NUMPAD_0..KeyEvent.KEYCODE_NUMPAD_9)
+    }
+
 }
