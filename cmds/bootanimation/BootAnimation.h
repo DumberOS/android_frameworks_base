@@ -20,6 +20,7 @@
 #include <vector>
 #include <queue>
 #include <climits>
+#include <string>
 
 #include <stdint.h>
 #include <sys/types.h>
@@ -247,6 +248,7 @@ private:
     GLuint mTextCropAreaLocation;
     GLuint mTextTextureLocation;
     GLuint mImageColorProgressLocation;
+    std::string mVersionLabel;
 };
 
 // ---------------------------------------------------------------------------

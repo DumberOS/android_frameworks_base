@@ -20,6 +20,8 @@
 
 #include <filesystem>
 #include <vector>
+#include <string>
+#include <stdlib.h>
 
 #include <stdint.h>
 #include <inttypes.h>
@@ -214,6 +216,22 @@ BootAnimation::BootAnimation(sp<Callbacks> callbacks)
     }
     ALOGD("%sAnimationStartTiming start time: %" PRId64 "ms", mShuttingDown ? "Shutdown" : "Boot",
             elapsedRealtime());
+    std::string buildUtc = android::base::GetProperty("ro.system.build.date.utc", "");
+    std::string branch = android::base::GetProperty("ro.dumbdroid.branch", "");
+    if (!buildUtc.empty()) {
+        time_t t = strtoll(buildUtc.c_str(), nullptr, 10);
+        struct tm tm;
+        gmtime_r(&t, &tm);
+        char buf[9];
+        if (strftime(buf, sizeof(buf), "%Y%m%d", &tm) != 0) {
+            mVersionLabel = buf;
+        }
+    }
+    if (branch == "gapps")
+        mVersionLabel += "+gapps";
+    if (mVersionLabel.empty()) {
+        mVersionLabel = "Version: unknown";
+    }
 }
 
 BootAnimation::~BootAnimation() {
@@ -1114,7 +1132,7 @@ status_t BootAnimation::initFont(Font* font, const char* fallback) {
 
     if (status == NO_ERROR) {
         font->char_width = font->texture.w / FONT_NUM_COLS;
-        font->char_height = font->texture.h / FONT_NUM_ROWS / 2;  // There are bold and regular rows
+        font->char_height = font->texture.h / FONT_NUM_ROWS;  // There are bold and regular rows
     }
 
     return status;
@@ -1155,7 +1173,7 @@ void BootAnimation::drawText(const char* str, const Font& font, bool bold, int* 
         // Bold fonts are expected in the second half of each row.
         float v0 = (row + (bold ? 0.5f : 0.0f)) / FONT_NUM_ROWS;
         float u0 = ((float)col) / FONT_NUM_COLS;
-        float v1 = v0 + 1.0f / FONT_NUM_ROWS / 2;
+        float v1 = v0 + 1.0f / FONT_NUM_ROWS;
         float u1 = u0 + 1.0f / FONT_NUM_COLS;
         glUniform4f(mTextCropAreaLocation, u0, v0, u1, v1);
         drawTexturedQuad(*x, *y, font.char_width, font.char_height);
@@ -1201,7 +1219,7 @@ void BootAnimation::drawProgress(int percent, const Font& font, const int xPos, 
     char percentBuff[PERCENT_LENGTH];
     // ';' has the ascii code just after ':', and the font resource contains '%'
     // for that ascii code.
-    sprintf(percentBuff, "%d;", percent);
+    sprintf(percentBuff, "Progress %d;", percent);
     int x = xPos;
     int y = yPos;
     drawText(percentBuff, font, false, &x, &y);
@@ -1746,6 +1764,16 @@ bool BootAnimation::playAnimation(const Animation& animation) {
                     drawProgress(lastDisplayedProgress, animation.progressFont, posX, posY);
                 }
 
+                if (animation.progressFont.texture.name != 0) {
+                    int vx = TEXT_CENTER_VALUE;
+                    int vy = 15;
+		    std::string bootTimeLabel = std::to_string(elapsedRealtime() / 1000) + "s";
+                    drawText(bootTimeLabel.c_str(), animation.progressFont, false, &vx, &vy);
+
+                    vx = TEXT_CENTER_VALUE;
+                    vy += 40;
+                    drawText(mVersionLabel.c_str(), animation.progressFont, false, &vx, &vy);
+                }
                 handleViewport(frameDuration);
 
                 eglSwapBuffers(mDisplay, mSurface);
