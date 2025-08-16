@@ -450,6 +450,9 @@ java_defaults {
     libs: [
         "framework-virtualization.stubs.module_lib",
         "framework-non-updatable-unbundled-impl-libs",
+        "bouncycastle_asn1",
+        "bouncycastle_pkix",
+        "bouncycastle_util",
     ],
 }
 
@@ -484,6 +487,11 @@ java_library {
     ],
     compile_dex: false,
     headers_only: true,
+    static_libs: [
+        "bouncycastle_asn1",
+        "bouncycastle_pkix",
+        "bouncycastle_util",
+    ],
 }
 
 java_library {
@@ -504,6 +512,11 @@ java_library {
         "//frameworks/base/apex/jobscheduler/framework",
         "//frameworks/base/packages/Tethering/tests/unit",
         "//packages/modules/Connectivity/Tethering/tests/unit",
+    ],
+    static_libs: [
+        "bouncycastle_asn1",
+        "bouncycastle_pkix",
+        "bouncycastle_util",
     ],
     errorprone: {
         javacflags: [
@@ -551,6 +564,9 @@ java_library {
         "framework-minus-apex",
         "framework-non-updatable-unbundled-impl-libs",
         "framework-updatable-stubs-module_libs_api",
+        "bouncycastle_asn1",
+        "bouncycastle_pkix",
+        "bouncycastle_util",
     ],
     sdk_version: "core_platform",
     apex_available: ["//apex_available:platform"],
