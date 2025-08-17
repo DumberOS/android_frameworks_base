@@ -41,6 +41,8 @@ interface ISystemUiProxy {
      */
     oneway void onOverviewShown(boolean fromHome) = 6;
 
+    oneway void onOverviewHidden() = 60;
+
     /**
      * Proxies motion events from the homescreen UI to the status bar. Only called when
      * swipe down is detected on WORKSPACE. The sender guarantees the following order of events on

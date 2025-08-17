@@ -318,6 +318,19 @@ public class OverviewProxyService implements CallbackController<OverviewProxyLis
                     .injectInputEvent(ev, InputManager.INJECT_INPUT_EVENT_MODE_ASYNC);
         }
 
+        private static void setRecentsVisibility(boolean visible) {
+            try {
+                final android.os.IBinder b = android.os.ServiceManager.getService("window");
+                final android.view.IWindowManager wm =
+                    android.view.IWindowManager.Stub.asInterface(b);
+                if (wm != null) {
+                    wm.setRecentsVisibility(visible);
+                }
+            } catch (android.os.RemoteException e) {
+                // SystemUI may be restarting; ignore
+            }
+        }
+
         @Override
         public void onOverviewShown(boolean fromHome) {
             verifyCallerAndClearCallingIdentityPostMain("onOverviewShown", () -> {
@@ -325,6 +338,12 @@ public class OverviewProxyService implements CallbackController<OverviewProxyLis
                     mConnectionCallbacks.get(i).onOverviewShown(fromHome);
                 }
             });
+            setRecentsVisibility(true);
+        }
+
+        @Override
+        public void onOverviewHidden() {
+            setRecentsVisibility(false);
         }
 
         @Override
