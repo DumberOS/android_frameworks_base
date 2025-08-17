@@ -5154,7 +5154,8 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         }
 
         // no keyguard stuff to worry about, just launch home!
-        if (mRecentsVisible) {
+	// commenting this out since it breaks going home from recents (hideRecentApps() doesn't seem to do anything
+/*        if (mRecentsVisible) {
             try {
                 ActivityManager.getService().stopAppSwitches();
             } catch (RemoteException e) {}
@@ -5164,7 +5165,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                 awakenDreams();
             }
             hideRecentApps(false, true);
-        } else if (mDefaultDisplayPolicy.isScreenOnFully()) {
+        } else */if (mDefaultDisplayPolicy.isScreenOnFully()) {
             // Otherwise, just launch Home
             startDockOrHome(displayId, true /*fromHomeKey*/, awakenFromDreams);
         }
@@ -5173,6 +5174,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     @Override
     public void setRecentsVisibilityLw(boolean visible) {
         mRecentsVisible = visible;
+	Log.i("Dumbdroid", "Recents visibility: " + visible);
     }
 
     @Override
