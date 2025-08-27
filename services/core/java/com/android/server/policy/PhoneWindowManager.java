@@ -1351,6 +1351,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             }
             if (!isOnHomeScreen() && mPowerButtonAction != 0) {
                 shortPressPowerGoHome();
+		mRecentsVisible = false;
                 return;
             }
             switch (mShortPressOnPowerBehavior) {
