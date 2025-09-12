@@ -2393,4 +2393,5 @@
     <string name="satellite_notification_summary" msgid="5207364139430767162">"ଏକ ମୋବାଇଲ କିମ୍ବା ୱାଇ-ଫାଇ ନେଟୱାର୍କ ବିନା ଆପଣ ମେସେଜ ପଠାଇପାରିବେ ଏବଂ ପାଇପାରିବେ"</string>
     <string name="satellite_notification_open_message" msgid="4149234979688273729">"Messages ଖୋଲନ୍ତୁ"</string>
     <string name="satellite_notification_how_it_works" msgid="3132069321977520519">"ଏହା କିପରି କାମ କରେ"</string>
+    <string name="prox_touch_block_message">ଅନଇଚ୍ଛିତ ଛୁଆଁକୁ ରୋକାଯାଉଛି। ବନ୍ଦ କରିବାକୁ ‘Back’ ଦବାନ୍ତୁ।</string>
 </resources>

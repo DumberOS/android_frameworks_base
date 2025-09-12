@@ -2393,4 +2393,5 @@
     <string name="satellite_notification_summary" msgid="5207364139430767162">"모바일 또는 Wi-Fi 네트워크 없이 메시지를 주고 받을 수 있습니다"</string>
     <string name="satellite_notification_open_message" msgid="4149234979688273729">"메시지 열기"</string>
     <string name="satellite_notification_how_it_works" msgid="3132069321977520519">"작동 방식"</string>
+    <string name="prox_touch_block_message">오작동 터치를 방지합니다. 닫으려면 뒤로가기를 누르세요.</string>
 </resources>

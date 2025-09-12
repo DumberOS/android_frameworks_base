@@ -2393,4 +2393,5 @@
     <string name="satellite_notification_summary" msgid="5207364139430767162">"Ungathumela futhi wamukele imilayezo ngaphandle kwenethiwekhi yeselula noma ye-Wi-Fi"</string>
     <string name="satellite_notification_open_message" msgid="4149234979688273729">"Vula Imilayezo"</string>
     <string name="satellite_notification_how_it_works" msgid="3132069321977520519">"Indlela esebenza ngayo"</string>
+    <string name="prox_touch_block_message">Kuvimbela ukuthinta okungahleliwe. Cindezela Emuva ukuze uvale.</string>
 </resources>

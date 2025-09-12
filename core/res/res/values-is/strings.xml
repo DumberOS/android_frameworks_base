@@ -2393,4 +2393,5 @@
     <string name="satellite_notification_summary" msgid="5207364139430767162">"Þú getur sent og móttekið skilaboð án tengingar við farsímakerfi eða Wi-Fi"</string>
     <string name="satellite_notification_open_message" msgid="4149234979688273729">"Opna Messages"</string>
     <string name="satellite_notification_how_it_works" msgid="3132069321977520519">"Svona virkar þetta"</string>
+    <string name="prox_touch_block_message">Koma í veg fyrir óviljandi snertingar. Ýttu á Til baka til að loka.</string>
 </resources>

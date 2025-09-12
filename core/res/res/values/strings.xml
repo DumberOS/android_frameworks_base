@@ -55,6 +55,7 @@
     <!-- Displayed when a carrier does not support call forwarding queries when roaming. -->
     <string name="mmiErrorWhileRoaming">Can not change call forwarding settings from your phone while you are roaming.</string>
 
+    <string name="prox_touch_block_message">Preventing accidental touches. Press Back to dismiss.</string>
     <!-- Displayed when a phone feature such as call forwarding, call waiting, or call barring was
          activated.
          Used to build messages of the form:
