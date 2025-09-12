@@ -2394,4 +2394,5 @@
     <string name="satellite_notification_summary" msgid="5207364139430767162">"Varat sūtīt un saņemt ziņojumus bez mobilā vai Wi-Fi tīkla."</string>
     <string name="satellite_notification_open_message" msgid="4149234979688273729">"Atvērt lietotni Ziņojumi"</string>
     <string name="satellite_notification_how_it_works" msgid="3132069321977520519">"Darbības principi"</string>
+    <string name="prox_touch_block_message">Novērš nejaušus pieskārienus. Nospiediet Atpakaļ, lai aizvērtu.</string>
 </resources>

@@ -100,6 +100,7 @@ import static com.android.server.wm.WindowManagerPolicyProto.WINDOW_MANAGER_DRAW
 
 import static org.lineageos.internal.util.DeviceKeysConstants.*;
 
+import com.android.server.policy.ProximityTouchBlockOverlay;
 import android.accessibilityservice.AccessibilityService;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
@@ -275,6 +276,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Supplier;
+import android.hardware.Sensor;
+import android.hardware.SensorManager;
+import android.os.PowerManager;
 
 /**
  * WindowManagerPolicy implementation for the Android phone UI.  This
@@ -2586,6 +2590,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         init(new Injector(context, funcs));
     }
 
+    private HeuristicProximityController mHeuristicProx;
+    private ProximityTouchBlockOverlay mProxOverlay;
+
     @VisibleForTesting
     void init(Injector injector) {
         mContext = injector.getContext();
@@ -2879,6 +2886,11 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         filter = new IntentFilter();
         filter.addAction(ACTION_TORCH_OFF);
         mContext.registerReceiver(torchReceiver, filter);
+    }
+
+    private static boolean deviceHasProximitySensor(Context ctx) {
+        final SensorManager sm = ctx.getSystemService(SensorManager.class);
+        return sm != null && sm.getDefaultSensor(Sensor.TYPE_PROXIMITY) != null;
     }
 
     private void initKeyCombinationRules() {
@@ -3958,6 +3970,15 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             consumedKeys.remove(keyCode);
             if (consumedKeys.isEmpty()) {
                 mConsumedKeysForDevice.remove(deviceId);
+            }
+        }
+
+        if (event.getKeyCode() == KeyEvent.KEYCODE_BACK && event.getAction() == KeyEvent.ACTION_DOWN) {
+            Log.d("Dumbdroid proximity", "Trying to hide the proximity overlay.");
+            if (mProxOverlay != null && mProxOverlay.isShown()) {
+                Log.d("Dumbdroid proximity", "Hiding the proximity overlay.");
+                mProxOverlay.hideThreadSafe();
+                return -1; // consume; don't let apps see this Back
             }
         }
 
@@ -6921,6 +6942,23 @@ public class PhoneWindowManager implements WindowManagerPolicy {
 
         mAutofillManagerInternal = LocalServices.getService(AutofillManagerInternal.class);
         mGestureLauncherService = LocalServices.getService(GestureLauncherService.class);
+        final PowerManager pm = (PowerManager) mContext.getSystemService(Context.POWER_SERVICE);
+        if (!deviceHasProximitySensor(mContext)) {
+            mProxOverlay = new ProximityTouchBlockOverlay(mContext);
+            Slog.d("Dumbdroid proximity", "Initializing controller");
+            mHeuristicProx = new HeuristicProximityController(mContext, near -> {
+                Slog.d("Dumbdroid", "Proximity near: " + near);
+                if (near) {
+                    if (!mProxOverlay.isShown()) {
+                        mProxOverlay.show();
+                    }
+                } else {
+                    if (mProxOverlay.isShown()) {
+                        mProxOverlay.hide();
+                    }
+                }
+            });
+        }
     }
 
     /** {@inheritDoc} */

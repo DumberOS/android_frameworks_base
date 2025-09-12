@@ -1190,4 +1190,5 @@
     <skip />
     <!-- no translation found for candidates_style (7738463880139922176) -->
     <skip />
+    <string name="prox_touch_block_message">Preventing accidental touches. Press Back to dismiss.</string>
 </resources>
