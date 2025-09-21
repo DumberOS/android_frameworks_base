@@ -21,6 +21,7 @@ import android.content.res.Configuration;
 import android.util.AttributeSet;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 import android.widget.BaseAdapter;
 import android.widget.LinearLayout;
 
@@ -34,6 +35,7 @@ public abstract class MultiListLayout extends LinearLayout {
     protected MultiListAdapter mAdapter;
     protected int mRotation;
     protected RotationListener mRotationListener;
+    private ViewTreeObserver.OnGlobalLayoutListener mFirstFocusableChildLayoutListener;
 
     public MultiListLayout(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -130,6 +132,84 @@ public abstract class MultiListLayout extends LinearLayout {
     protected void onUpdateList() {
         removeAllItems();
         setSeparatedViewVisibility(mAdapter.hasSeparatedItems());
+    }
+
+    /**
+     * Requests focus for the first visible and focusable child within this layout.
+     *
+     * @return {@code true} if a child took focus, {@code false} otherwise.
+     */
+    public boolean requestFirstFocusableChildFocus() {
+        if (requestFocusOnFirstFocusableDescendant(getListView())) {
+            return true;
+        }
+        return requestFocusOnFirstFocusableDescendant(getSeparatedView());
+    }
+
+    /**
+     * Ensures the first focusable child gains focus once the layout has been measured and shown.
+     * If a child can take focus immediately this behaves like {@link #requestFirstFocusableChildFocus()}.
+     * Otherwise it listens for the next layout pass and retries once the view hierarchy is ready.
+     */
+    public void ensureFirstFocusableChildFocus() {
+        if (requestFirstFocusableChildFocus()) {
+            return;
+        }
+        if (mFirstFocusableChildLayoutListener != null) {
+            return;
+        }
+        final ViewTreeObserver observer = getViewTreeObserver();
+        if (observer == null || !observer.isAlive()) {
+            return;
+        }
+        mFirstFocusableChildLayoutListener = new ViewTreeObserver.OnGlobalLayoutListener() {
+            @Override
+            public void onGlobalLayout() {
+                if (!isAttachedToWindow()) {
+                    removeFirstFocusableChildLayoutListener();
+                    return;
+                }
+                if (requestFirstFocusableChildFocus()) {
+                    removeFirstFocusableChildLayoutListener();
+                }
+            }
+        };
+        observer.addOnGlobalLayoutListener(mFirstFocusableChildLayoutListener);
+    }
+
+    private void removeFirstFocusableChildLayoutListener() {
+        if (mFirstFocusableChildLayoutListener == null) {
+            return;
+        }
+        final ViewTreeObserver observer = getViewTreeObserver();
+        if (observer != null && observer.isAlive()) {
+            observer.removeOnGlobalLayoutListener(mFirstFocusableChildLayoutListener);
+        }
+        mFirstFocusableChildLayoutListener = null;
+    }
+
+    private boolean requestFocusOnFirstFocusableDescendant(View view) {
+        if (view == null || !view.isShown()) {
+            return false;
+        }
+        if (view.isFocusable() && view.isEnabled()) {
+            return view.requestFocus();
+        }
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                if (requestFocusOnFirstFocusableDescendant(group.getChildAt(i))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        removeFirstFocusableChildLayoutListener();
     }
 
     public void setRotationListener(RotationListener listener) {
