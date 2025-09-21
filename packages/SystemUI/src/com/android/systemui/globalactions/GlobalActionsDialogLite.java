@@ -58,6 +58,7 @@ import android.graphics.BitmapShader;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Matrix;
+import android.graphics.Outline;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.graphics.Shader;
@@ -91,6 +92,7 @@ import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewOutlineProvider;
 import android.view.Window;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
@@ -1768,6 +1770,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
                     com.android.systemui.res.R.layout.global_actions_grid_item_lite;
             View view = convertView != null ? convertView
                     : LayoutInflater.from(mContext).inflate(viewLayoutResource, parent, false);
+            prepareItemViewForDpadNavigation(view);
             view.setOnClickListener(v -> onClickItem(position));
             if (action instanceof LongPressAction) {
                 view.setOnLongClickListener(v -> onLongClickItem(position));
@@ -1851,6 +1854,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             int viewLayoutResource = com.android.systemui.res.R.layout.global_actions_grid_item_lite;
             View view = convertView != null ? convertView
                     : LayoutInflater.from(mContext).inflate(viewLayoutResource, parent, false);
+            prepareItemViewForDpadNavigation(view);
             view.setOnClickListener(v -> onClickItem(position));
             ImageView icon = view.findViewById(R.id.icon);
             TextView messageView = view.findViewById(R.id.message);
@@ -2119,6 +2123,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             View v = inflater.inflate(getGridItemLayoutResource(), parent, false /* attach */);
             // ConstraintLayout flow needs an ID to reference
             v.setId(View.generateViewId());
+            prepareItemViewForDpadNavigation(v);
 
             ImageView icon = v.findViewById(R.id.icon);
             TextView messageView = v.findViewById(R.id.message);
@@ -2250,6 +2255,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             }
 
             v.setEnabled(enabled);
+            prepareItemViewForDpadNavigation(v);
 
             return v;
         }
@@ -2409,6 +2415,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
                 itemView.setSelected(selectedIndex == i);
                 // Set up click handler
                 itemView.setTag(i);
+                prepareItemViewForDpadNavigation(itemView);
                 itemView.setOnClickListener(this);
             }
             return v;
@@ -2508,6 +2515,38 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
     private static final int MESSAGE_REFRESH = 1;
     private static final int DIALOG_DISMISS_DELAY = 300; // ms
     private static final int DIALOG_PRESS_DELAY = 850; // ms
+
+    private static void prepareItemViewForDpadNavigation(View view) {
+        if (view == null) {
+            return;
+        }
+        view.setFocusable(true);
+        view.setFocusableInTouchMode(true);
+        view.setDefaultFocusHighlightEnabled(true);
+        float cornerRadius = view.getResources().getDimension(
+                com.android.systemui.res.R.dimen.global_actions_focus_highlight_corner_radius);
+        view.setOutlineProvider(new RoundedCornerOutlineProvider(cornerRadius));
+        view.invalidateOutline();
+    }
+
+    private static final class RoundedCornerOutlineProvider extends ViewOutlineProvider {
+        private final float mCornerRadius;
+
+        RoundedCornerOutlineProvider(float cornerRadius) {
+            mCornerRadius = cornerRadius;
+        }
+
+        @Override
+        public void getOutline(View view, Outline outline) {
+            int width = view.getWidth();
+            int height = view.getHeight();
+            if (width <= 0 || height <= 0) {
+                outline.setEmpty();
+                return;
+            }
+            outline.setRoundRect(0, 0, width, height, mCornerRadius);
+        }
+    }
 
     @VisibleForTesting void setZeroDialogPressDelayForTesting() {
         mDialogPressDelay = 0; // ms
@@ -2934,7 +2973,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
                 updateColors(colors, false /* animate */);
             }
 
-            mGlobalActionsLayout.getChildAt(0).requestFocus();
+            mGlobalActionsLayout.ensureFirstFocusableChildFocus();
         }
 
         /**
@@ -3147,6 +3186,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
 
             // Update the list as the max number of items per row has probably changed.
             mGlobalActionsLayout.updateList();
+            mGlobalActionsLayout.ensureFirstFocusableChildFocus();
         }
 
         public void onRotate(int from, int to) {
