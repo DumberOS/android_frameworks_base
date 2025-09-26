@@ -489,26 +489,7 @@ public class KeyguardIndicationController {
     }
 
     private void updateLockScreenDisclosureMsg() {
-        if (mOrganizationOwnedDevice) {
-            mBackgroundExecutor.execute(() -> {
-                final CharSequence organizationName = getOrganizationOwnedDeviceOrganizationName();
-                final CharSequence disclosure = getDisclosureText(organizationName);
-
-                mExecutor.execute(() -> {
-                    if (mKeyguardStateController.isShowing()) {
-                        mRotateTextViewController.updateIndication(
-                              INDICATION_TYPE_DISCLOSURE,
-                              new KeyguardIndication.Builder()
-                                      .setMessage(disclosure)
-                                      .setTextColor(mInitialTextColorState)
-                                      .build(),
-                              /* updateImmediately */ false);
-                    }
-                });
-            });
-        } else {
-            mRotateTextViewController.hideIndication(INDICATION_TYPE_DISCLOSURE);
-        }
+        mRotateTextViewController.hideIndication(INDICATION_TYPE_DISCLOSURE);
     }
 
     private CharSequence getDisclosureText(@Nullable CharSequence organizationName) {
