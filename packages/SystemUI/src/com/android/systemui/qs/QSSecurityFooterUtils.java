@@ -203,64 +203,7 @@ public class QSSecurityFooterUtils implements DialogInterface.OnClickListener {
      */
     @Nullable
     public SecurityButtonConfig getButtonConfig(SecurityModel securityModel) {
-        final boolean isDeviceManaged = securityModel.isDeviceManaged();
-        final UserInfo currentUser = mUserTracker.getUserInfo();
-        final boolean isDemoDevice = UserManager.isDeviceInDemoMode(mContext) && currentUser != null
-                && currentUser.isDemo();
-        final boolean hasWorkProfile = securityModel.getHasWorkProfile();
-        final boolean hasCACerts = securityModel.getHasCACertInCurrentUser();
-        final boolean hasCACertsInWorkProfile = securityModel.getHasCACertInWorkProfile();
-        final boolean isNetworkLoggingEnabled = securityModel.isNetworkLoggingEnabled();
-        final String vpnName = securityModel.getPrimaryVpnName();
-        final String vpnNameWorkProfile = securityModel.getWorkProfileVpnName();
-        final CharSequence organizationName = securityModel.getDeviceOwnerOrganizationName();
-        final CharSequence workProfileOrganizationName =
-                securityModel.getWorkProfileOrganizationName();
-        final boolean isProfileOwnerOfOrganizationOwnedDevice =
-                securityModel.isProfileOwnerOfOrganizationOwnedDevice();
-        final boolean isParentalControlsEnabled = securityModel.isParentalControlsEnabled();
-        final boolean isWorkProfileOn = securityModel.isWorkProfileOn();
-        final boolean hasDisclosableWorkProfilePolicy = hasCACertsInWorkProfile
-                || vpnNameWorkProfile != null || (hasWorkProfile && isNetworkLoggingEnabled);
-        // Update visibility of footer
-        boolean isVisible = (isDeviceManaged && !isDemoDevice)
-                || hasCACerts
-                || vpnName != null
-                || isProfileOwnerOfOrganizationOwnedDevice
-                || isParentalControlsEnabled
-                || (hasDisclosableWorkProfilePolicy && isWorkProfileOn);
-        if (!isVisible && !DEBUG_FORCE_VISIBLE) {
-            return null;
-        }
-
-        // Update the view to be untappable if the device is an organization-owned device with a
-        // managed profile and there is either:
-        // a) no policy set which requires a privacy disclosure.
-        // b) a specific work policy set but the work profile is turned off.
-        boolean isClickable = !(isProfileOwnerOfOrganizationOwnedDevice
-                && (!hasDisclosableWorkProfilePolicy || !isWorkProfileOn));
-
-        String text = getFooterText(isDeviceManaged, hasWorkProfile,
-                hasCACerts, hasCACertsInWorkProfile, isNetworkLoggingEnabled, vpnName,
-                vpnNameWorkProfile, organizationName, workProfileOrganizationName,
-                isProfileOwnerOfOrganizationOwnedDevice, isParentalControlsEnabled,
-                isWorkProfileOn).toString();
-
-        Icon icon;
-        ContentDescription contentDescription = null;
-        if (isParentalControlsEnabled && securityModel.getDeviceAdminIcon() != null) {
-            icon = new Icon.Loaded(securityModel.getDeviceAdminIcon(), contentDescription);
-        } else if (vpnName != null || vpnNameWorkProfile != null) {
-            if (securityModel.isVpnBranded()) {
-                icon = new Icon.Resource(R.drawable.stat_sys_branded_vpn, contentDescription);
-            } else {
-                icon = new Icon.Resource(R.drawable.stat_sys_vpn_ic, contentDescription);
-            }
-        } else {
-            icon = new Icon.Resource(R.drawable.ic_info_outline, contentDescription);
-        }
-
-        return new SecurityButtonConfig(icon, text, isClickable);
+	return null;
     }
 
     @Nullable
@@ -270,17 +213,7 @@ public class QSSecurityFooterUtils implements DialogInterface.OnClickListener {
             CharSequence workProfileOrganizationName,
             boolean isProfileOwnerOfOrganizationOwnedDevice, boolean isParentalControlsEnabled,
             boolean isWorkProfileOn) {
-        if (isParentalControlsEnabled) {
-            return mContext.getString(R.string.quick_settings_disclosure_parental_controls);
-        }
-        if (isDeviceManaged || DEBUG_FORCE_VISIBLE) {
-            return getManagedDeviceFooterText(hasCACerts, hasCACertsInWorkProfile,
-                    isNetworkLoggingEnabled, vpnName, vpnNameWorkProfile, organizationName);
-        }
-        return getManagedAndPersonalProfileFooterText(hasWorkProfile, hasCACerts,
-                hasCACertsInWorkProfile, isNetworkLoggingEnabled, vpnName, vpnNameWorkProfile,
-                workProfileOrganizationName, isProfileOwnerOfOrganizationOwnedDevice,
-                isWorkProfileOn);
+        return null;
     }
 
     private String getManagedDeviceFooterText(
@@ -654,23 +587,7 @@ public class QSSecurityFooterUtils implements DialogInterface.OnClickListener {
     @Nullable
     protected CharSequence getManagementMessage(boolean isDeviceManaged,
             CharSequence organizationName) {
-        if (!isDeviceManaged) {
-            return null;
-        }
-        if (organizationName != null) {
-            if (isFinancedDevice()) {
-                return mContext.getString(R.string.monitoring_financed_description_named_management,
-                        organizationName, organizationName);
-            } else {
-                return mDpm.getResources().getString(
-                        QS_DIALOG_NAMED_MANAGEMENT,
-                        () -> mContext.getString(
-                                R.string.monitoring_description_named_management,
-                                organizationName),
-                        organizationName);
-            }
-        }
-        return mDpm.getResources().getString(QS_DIALOG_MANAGEMENT, mManagementDialogStringSupplier);
+	return null;
     }
 
     @Nullable
