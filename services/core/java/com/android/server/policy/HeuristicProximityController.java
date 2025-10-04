@@ -48,7 +48,7 @@ final class HeuristicProximityController {
     // Audio state settling/polling
     private static final long SETTLE_MS = 600;        // require this long of "clean" state to treat voice as ended
     private static final long POLL_INTERVAL_MS = 200; // how often to poll after a change
-    private static final long POLL_BURST_DURATION_MS = 3000; // poll for up to this long after a change
+    private static final long POLL_BURST_DURATION_MS = 30000; // poll for up to this long after a change
 
     private final Context mContext;
     private final Listener mListener;
@@ -106,7 +106,7 @@ final class HeuristicProximityController {
             new AudioManager.AudioPlaybackCallback() {
                 @Override
                 public void onPlaybackConfigChanged(List<AudioPlaybackConfiguration> configs) {
-                    markAudioChangeAndRefresh();
+         //           markAudioChangeAndRefresh();
                     Slog.d("Dumbdroid proximity", "Audio playback changed");
                 }
             };
@@ -115,7 +115,7 @@ final class HeuristicProximityController {
             new AudioManager.AudioRecordingCallback() {
                 @Override
                 public void onRecordingConfigChanged(List<AudioRecordingConfiguration> configs) {
-                    markAudioChangeAndRefresh();
+           //         markAudioChangeAndRefresh();
                     Slog.d("Dumbdroid proximity", "Audio recording changed");
                 }
             };
@@ -134,7 +134,7 @@ final class HeuristicProximityController {
         }
     };
 
-    private void markAudioChangeAndRefresh() {
+    public void markAudioChangeAndRefresh() {
         mLastAudioChangeRealtime = SystemClock.elapsedRealtime();
         refreshActiveFromAudioRoute();
         schedulePollingBurst(); // keep nudging for a short while to catch laggy updates
@@ -146,7 +146,8 @@ final class HeuristicProximityController {
         mHandler.post(new Runnable() {
             @Override public void run() {
                 long elapsed = SystemClock.elapsedRealtime() - mLastAudioChangeRealtime;
-                refreshActiveFromAudioRoute();
+		if (mActive)
+                   refreshActiveFromAudioRoute();
                 if (elapsed < POLL_BURST_DURATION_MS) {
                     mHandler.postDelayed(this, POLL_INTERVAL_MS);
                 } else {

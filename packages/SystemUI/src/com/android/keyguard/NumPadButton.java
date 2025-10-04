@@ -46,6 +46,8 @@ public class NumPadButton extends AlphaOptimizedImageButton implements NumPadAni
 
     public NumPadButton(Context context, AttributeSet attrs) {
         super(context, attrs);
+	 setFocusable(false);
+        setDefaultFocusHighlightEnabled(false);
         mStyleAttr = attrs.getStyleAttribute();
         setupAnimator();
     }

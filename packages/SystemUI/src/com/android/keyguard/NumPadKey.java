@@ -95,6 +95,7 @@ public class NumPadKey extends ViewGroup implements NumPadAnimationListener {
     protected NumPadKey(Context context, AttributeSet attrs, int defStyle, int contentResource) {
         super(context, attrs, defStyle);
         setFocusable(true);
+	setDefaultFocusHighlightEnabled(false);
 
         TypedArray a = context.obtainStyledAttributes(attrs, R.styleable.NumPadKey, defStyle,
                 contentResource);
