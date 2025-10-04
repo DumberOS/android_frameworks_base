@@ -59,6 +59,17 @@ constructor(
                 KeyEvent.KEYCODE_VOLUME_UP -> return dispatchVolumeKeyEvent(event)
             }
         }
+        if (
+            statusBarStateController.state == StatusBarState.KEYGUARD ||
+                statusBarStateController.state == StatusBarState.SHADE_LOCKED
+        ) {
+            when (event.keyCode) {
+                KeyEvent.KEYCODE_DPAD_UP,
+                KeyEvent.KEYCODE_DPAD_DOWN,
+                KeyEvent.KEYCODE_DPAD_LEFT,
+                KeyEvent.KEYCODE_DPAD_RIGHT -> return true
+            }
+        }
 
         if (event.handleAction()) {
             if (KeyEvent.isConfirmKey(event.keyCode)) {

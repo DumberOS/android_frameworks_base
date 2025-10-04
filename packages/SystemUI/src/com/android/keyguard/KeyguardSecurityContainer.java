@@ -66,6 +66,7 @@ import android.util.TypedValue;
 import android.view.GestureDetector;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
+import android.view.KeyEvent;
 import android.view.VelocityTracker;
 import android.view.View;
 import android.view.ViewConfiguration;
@@ -647,6 +648,8 @@ public class KeyguardSecurityContainer extends ConstraintLayout {
     @Override
     public void onFinishInflate() {
         super.onFinishInflate();
+	        setDefaultFocusHighlightEnabled(false);
+        setFocusable(false);
         mSecurityViewFlipper = findViewById(R.id.view_flipper);
     }
 
@@ -672,6 +675,18 @@ public class KeyguardSecurityContainer extends ConstraintLayout {
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
         return TouchLogger.logDispatchTouch(TAG, ev, super.dispatchTouchEvent(ev));
+    }
+
+        @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        int keyCode = event.getKeyCode();
+        if (keyCode == KeyEvent.KEYCODE_DPAD_UP
+                || keyCode == KeyEvent.KEYCODE_DPAD_DOWN
+                || keyCode == KeyEvent.KEYCODE_DPAD_LEFT
+                || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+            return true;
+        }
+        return super.dispatchKeyEvent(event);
     }
 
     @Override

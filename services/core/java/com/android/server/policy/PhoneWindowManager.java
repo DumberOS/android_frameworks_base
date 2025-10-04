@@ -1246,15 +1246,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         TelecomManager telecomManager = getTelecommService();
         boolean hungUp = false;
         if (telecomManager != null) {
-            if (telecomManager.isRinging()) {
-                // Pressing Power while there's a ringing incoming
-                // call should silence the ringer.
-                telecomManager.silenceRinger();
-            } else if ((mIncallPowerBehavior
-                    & Settings.Secure.INCALL_POWER_BUTTON_BEHAVIOR_HANGUP) != 0
-                    && telecomManager.isInCall() && interactive) {
-                // Otherwise, if "Power button ends call" is enabled,
-                // the Power button will hang up any current active call.
+            if (telecomManager.isRinging() || telecomManager.isInCall()) {
                 hungUp = telecomManager.endCall();
             }
         }
@@ -3978,6 +3970,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             if (mProxOverlay != null && mProxOverlay.isShown()) {
                 Log.d("Dumbdroid proximity", "Hiding the proximity overlay.");
                 mProxOverlay.hideThreadSafe();
+		mHeuristicProx.markAudioChangeAndRefresh();
                 return -1; // consume; don't let apps see this Back
             }
         }
@@ -5508,14 +5501,43 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         if (dispatchKeyToKeyHandlers(event)) {
             return 0;
         }
-    if (down && !interactive &&
-            (keyCode == KeyEvent.KEYCODE_DPAD_DOWN || keyCode == KeyEvent.KEYCODE_DPAD_UP)) {
-        if (mDpadScreenOffAction != Action.NOTHING)
-        dispatchDirectAudioEvent(new KeyEvent(event.getDownTime(), event.getEventTime(),
-            KeyEvent.ACTION_DOWN, keyCode == KeyEvent.KEYCODE_DPAD_DOWN 
-                ? KeyEvent.KEYCODE_VOLUME_DOWN : KeyEvent.KEYCODE_VOLUME_UP, 0));
-        return 0;
-    }
+        if (!interactive && mDpadScreenOffAction != Action.NOTHING) {
+            switch (keyCode) {
+                case KeyEvent.KEYCODE_DPAD_DOWN:
+                case KeyEvent.KEYCODE_DPAD_UP:
+                    if (down) {
+                        dispatchDirectAudioEvent(new KeyEvent(event.getDownTime(),
+                                event.getEventTime(), KeyEvent.ACTION_DOWN,
+                                keyCode == KeyEvent.KEYCODE_DPAD_DOWN
+                                        ? KeyEvent.KEYCODE_VOLUME_DOWN
+                                        : KeyEvent.KEYCODE_VOLUME_UP, 0));
+                    }
+                    return 0;
+                case KeyEvent.KEYCODE_DPAD_CENTER:
+                case KeyEvent.KEYCODE_DPAD_LEFT:
+                case KeyEvent.KEYCODE_DPAD_RIGHT:
+                    if (event.getRepeatCount() == 0) {
+                        final int mediaKeyCode;
+                        if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
+                            mediaKeyCode = KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE;
+                        } else if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
+                            mediaKeyCode = KeyEvent.KEYCODE_MEDIA_PREVIOUS;
+                        } else {
+                            mediaKeyCode = KeyEvent.KEYCODE_MEDIA_NEXT;
+                        }
+
+                        KeyEvent mediaKeyEvent = new KeyEvent(event.getDownTime(),
+                                event.getEventTime(), down ? KeyEvent.ACTION_DOWN
+                                        : KeyEvent.ACTION_UP, mediaKeyCode, 0);
+                        mBroadcastWakeLock.acquire();
+                        Message msg = mHandler.obtainMessage(
+                                MSG_DISPATCH_MEDIA_KEY_WITH_WAKE_LOCK, mediaKeyEvent);
+                        msg.setAsynchronous(true);
+                        msg.sendToTarget();
+                    }
+                    return 0;
+            }
+        }
         // Handle special keys.
         switch (keyCode) {
             case KeyEvent.KEYCODE_BACK: {
