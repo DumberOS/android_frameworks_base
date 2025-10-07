@@ -5394,6 +5394,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         final boolean canceled = event.isCanceled();
         final int displayId = event.getDisplayId();
         final boolean isInjected = (policyFlags & WindowManagerPolicy.FLAG_INJECTED) != 0;
+        final boolean isNumberKey = isNumericKey(keyCode);
 
         // If screen is off then we treat the case where the keyguard is open but hidden
         // the same as if it were open and in front.
@@ -5437,14 +5438,26 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             mPendingWakeKey = PENDING_KEY_NULL;
         } else {
             // When the screen is off and the key is not injected, determine whether
-            // to wake the device but don't pass the key to the application.
-            result = 0;
-            if (isWakeKey && (!down || !isWakeKeyWhenScreenOff(keyCode))) {
-                isWakeKey = false;
-            }
-            // Cache the wake key on down event so we can also avoid sending the up event to the app
-            if (isWakeKey && down) {
-                mPendingWakeKey = keyCode;
+            // to wake the device but don't pass the key to the application. Numeric keys are
+            // forwarded so they can unlock the keyguard PIN after waking the device.
+            if (isNumberKey) {
+                result = ACTION_PASS_TO_USER;
+                if (down) {
+                    isWakeKey = true;
+                } else {
+                    isWakeKey = false;
+                }
+                mPendingWakeKey = PENDING_KEY_NULL;
+            } else {
+                result = 0;
+                if (isWakeKey && (!down || !isWakeKeyWhenScreenOff(keyCode))) {
+                    isWakeKey = false;
+                }
+                // Cache the wake key on down event so we can also avoid sending the up event
+                // to the app
+                if (isWakeKey && down) {
+                    mPendingWakeKey = keyCode;
+                }
             }
         }
 
@@ -6098,6 +6111,12 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             default:
                 return true;
         }
+    }
+
+    private static boolean isNumericKey(int keyCode) {
+        return (keyCode >= KeyEvent.KEYCODE_0 && keyCode <= KeyEvent.KEYCODE_9)
+                || (keyCode >= KeyEvent.KEYCODE_NUMPAD_0
+                && keyCode <= KeyEvent.KEYCODE_NUMPAD_9);
     }
 
     /**
