@@ -6134,8 +6134,16 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         }
 
         final int quality = mLockPatternUtils.getKeyguardStoredPasswordQuality(mCurrentUserId);
-        return quality == DevicePolicyManager.PASSWORD_QUALITY_NUMERIC
+        final boolean isNumericPin = quality == DevicePolicyManager.PASSWORD_QUALITY_NUMERIC
                 || quality == DevicePolicyManager.PASSWORD_QUALITY_NUMERIC_COMPLEX;
+
+        if (!isNumericPin) {
+            return false;
+        }
+
+        return LineageSettings.System.getIntForUser(mContext.getContentResolver(),
+                LineageSettings.System.LOCKSCREEN_WAKE_ON_NUMERIC_KEY,
+                /* def= */ 1, mCurrentUserId) == 1;
     }
 
     /**
