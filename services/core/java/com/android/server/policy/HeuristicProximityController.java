@@ -56,6 +56,7 @@ final class HeuristicProximityController {
     private final SensorManager mSM;
     private final AudioManager mAM;
 
+    private boolean mCallActive;      // Currently on a call
     // Sensor state
     private boolean mActive;          // whether we should evaluate orientation at all
     private boolean mNear;            // current debounced "near" state
@@ -97,8 +98,11 @@ final class HeuristicProximityController {
             new AudioManager.OnModeChangedListener() {
                 @Override
                 public void onModeChanged(int mode) {
+                    mCallActive = (mode == 2 || mode == 3 || mode == 1);
                     markAudioChangeAndRefresh();
                     Slog.d("Dumbdroid proximity", "Mode changed: " + mode);
+                    if (!mCallActive)
+                        setActive(false);
                 }
             };
 
@@ -295,7 +299,10 @@ final class HeuristicProximityController {
 
     private void setActive(boolean active) {
         Slog.d("Dumbdroid proximity", "active: " + active);
-        if (active == mActive) return;
+        if (active == mActive)
+            return;
+        if (!mCallActive && active)
+            return;
         mActive = active;
         if (mActive) {
             Sensor grav = null;//mSM.getDefaultSensor(Sensor.TYPE_GRAVITY);
