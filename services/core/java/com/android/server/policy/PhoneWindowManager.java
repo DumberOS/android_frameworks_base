@@ -5397,6 +5397,12 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         final boolean isInjected = (policyFlags & WindowManagerPolicy.FLAG_INJECTED) != 0;
         final boolean isNumberKey = isNumericKey(keyCode);
         final boolean allowNumberKeyWake = isNumberKey && shouldWakeOnNumericKey();
+        final boolean voiceCallActiveWithScreenOff = !interactive && !isInjected
+                && isVoiceCallActive();
+
+        if (voiceCallActiveWithScreenOff && keyCode != KeyEvent.KEYCODE_POWER && down) {
+            isWakeKey = true;
+        }
 
         // If screen is off then we treat the case where the keyguard is open but hidden
         // the same as if it were open and in front.
@@ -5452,7 +5458,8 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                 mPendingWakeKey = PENDING_KEY_NULL;
             } else {
                 result = 0;
-                if (isWakeKey && (!down || !isWakeKeyWhenScreenOff(keyCode))) {
+                if (isWakeKey && (!down || (!voiceCallActiveWithScreenOff
+                        && !isWakeKeyWhenScreenOff(keyCode)))) {
                     isWakeKey = false;
                 }
                 // Cache the wake key on down event so we can also avoid sending the up event
@@ -6156,6 +6163,11 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                 return mWakeOnCameraKeyPress;
         }
         return true;
+    }
+
+    private boolean isVoiceCallActive() {
+        final TelecomManager telecomManager = getTelecommService();
+        return telecomManager != null && telecomManager.isInCall();
     }
 
     /**
