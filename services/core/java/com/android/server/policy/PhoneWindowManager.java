@@ -110,6 +110,7 @@ import android.app.ActivityManager.RecentTaskInfo;
 import android.app.ActivityManagerInternal;
 import android.app.ActivityTaskManager;
 import android.app.ActivityTaskManager.RootTaskInfo;
+import android.app.admin.DevicePolicyManager;
 import android.app.AlarmManager;
 import android.app.AppOpsManager;
 import android.app.IActivityManager;
@@ -5395,6 +5396,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         final int displayId = event.getDisplayId();
         final boolean isInjected = (policyFlags & WindowManagerPolicy.FLAG_INJECTED) != 0;
         final boolean isNumberKey = isNumericKey(keyCode);
+        final boolean allowNumberKeyWake = isNumberKey && shouldWakeOnNumericKey();
 
         // If screen is off then we treat the case where the keyguard is open but hidden
         // the same as if it were open and in front.
@@ -5439,8 +5441,8 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         } else {
             // When the screen is off and the key is not injected, determine whether
             // to wake the device but don't pass the key to the application. Numeric keys are
-            // forwarded so they can unlock the keyguard PIN after waking the device.
-            if (isNumberKey) {
+            // forwarded when a PIN lock is present so they can unlock the keyguard after waking.
+            if (allowNumberKeyWake) {
                 result = ACTION_PASS_TO_USER;
                 if (down) {
                     isWakeKey = true;
@@ -6117,6 +6119,16 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         return (keyCode >= KeyEvent.KEYCODE_0 && keyCode <= KeyEvent.KEYCODE_9)
                 || (keyCode >= KeyEvent.KEYCODE_NUMPAD_0
                 && keyCode <= KeyEvent.KEYCODE_NUMPAD_9);
+    }
+
+    private boolean shouldWakeOnNumericKey() {
+        if (mLockPatternUtils == null) {
+            return false;
+        }
+
+        final int quality = mLockPatternUtils.getKeyguardStoredPasswordQuality(mCurrentUserId);
+        return quality == DevicePolicyManager.PASSWORD_QUALITY_NUMERIC
+                || quality == DevicePolicyManager.PASSWORD_QUALITY_NUMERIC_COMPLEX;
     }
 
     /**
