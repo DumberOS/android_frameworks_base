@@ -688,7 +688,6 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     private Action mHomeDoubleTapAction;
     private int mPowerButtonAction;
     private Action mDpadScreenOffAction;
-    private Action mDpadMusicPlayingAction;
     private Action mDpadCallActiveAction;
     private Action mPowerSinglePressAction;
     private Action mMenuPressAction;
@@ -1063,9 +1062,6 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                     UserHandle.USER_ALL);
             resolver.registerContentObserver(LineageSettings.System.getUriFor(
                     LineageSettings.System.KEY_DPAD_SCREEN_OFF_ACTION), false, this,
-                    UserHandle.USER_ALL);
-            resolver.registerContentObserver(LineageSettings.System.getUriFor(
-                    LineageSettings.System.KEY_DPAD_MUSIC_PLAYING_ACTION), false, this,
                     UserHandle.USER_ALL);
             resolver.registerContentObserver(LineageSettings.System.getUriFor(
                     LineageSettings.System.KEY_DPAD_CALL_ACTIVE_ACTION), false, this,
@@ -3346,16 +3342,6 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                 LineageSettings.System.KEY_DPAD_SCREEN_OFF_ACTION,
                 mDpadScreenOffAction);
 
-        mDpadMusicPlayingAction = Action.fromIntSafe(res.getInteger(
-                org.lineageos.platform.internal.R.integer.config_musicPlayingDpadBehavior));
-        if (mDpadMusicPlayingAction.ordinal() > Action.SLEEP.ordinal()) {
-            mDpadMusicPlayingAction = Action.NOTHING;
-        }
-
-        mDpadMusicPlayingAction = Action.fromSettings(resolver,
-                LineageSettings.System.KEY_DPAD_MUSIC_PLAYING_ACTION,
-                mDpadMusicPlayingAction);
-
         mDpadCallActiveAction = Action.fromIntSafe(res.getInteger(
                 org.lineageos.platform.internal.R.integer.config_callActiveDpadBehavior));
         if (mDpadCallActiveAction.ordinal() > Action.SLEEP.ordinal()) {
@@ -4182,14 +4168,12 @@ public class PhoneWindowManager implements WindowManagerPolicy {
 		}*/
             case KeyEvent.KEYCODE_DPAD_UP:
                 if (down) {
-                    AudioManager mAudioManager = (AudioManager) mContext.getSystemService(Context.AUDIO_SERVICE);
                     TelecomManager telecomManager = getTelecommService();
                     boolean isInCall = (telecomManager != null && telecomManager.isInCall()) ||
                             getCurrentAudioMode() == AudioManager.MODE_IN_COMMUNICATION;
-                    if ((mAudioManager.isMusicActive() && mDpadMusicPlayingAction != Action.NOTHING) ||
-                            (isInCall && mDpadCallActiveAction != Action.NOTHING)) {
+                    if (isInCall && mDpadCallActiveAction != Action.NOTHING) {
                         dispatchDirectAudioEvent(new KeyEvent(event.getDownTime(), event.getEventTime(),
-                                KeyEvent.ACTION_DOWN, event.getKeyCode() == KeyEvent.KEYCODE_DPAD_DOWN 
+                                KeyEvent.ACTION_DOWN, event.getKeyCode() == KeyEvent.KEYCODE_DPAD_DOWN
                                     ? KeyEvent.KEYCODE_VOLUME_DOWN : KeyEvent.KEYCODE_VOLUME_UP, 0));
                         return true;
                     }
