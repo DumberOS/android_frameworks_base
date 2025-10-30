@@ -690,6 +690,16 @@
     <!-- label for item that restarts phone in phone options dialog [CHAR LIMIT=24]-->
     <string name="global_action_restart">Restart</string>
 
+    <!-- label for item that performs a factory reset from the phone options dialog while the device is being set up [CHAR LIMIT=24] -->
+    <string name="global_action_factory_reset">Factory reset</string>
+
+    <!-- message shown when confirming a factory reset triggered from the phone options dialog.
+         Keep concise because this is displayed in a modal confirmation dialog. [CHAR LIMIT=NONE] -->
+    <string name="global_action_factory_reset_message">Erase all data from this device now? This can\'t be undone.</string>
+
+    <!-- label for the positive button that confirms the factory reset from the phone options dialog [CHAR LIMIT=24] -->
+    <string name="global_action_factory_reset_confirm">Factory reset</string>
+
     <!-- label for item that opens emergency features in the phone options dialog [CHAR LIMIT=24]-->
     <string name="global_action_emergency">Emergency</string>
 

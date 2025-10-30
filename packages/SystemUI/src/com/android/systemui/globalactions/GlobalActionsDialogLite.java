@@ -192,6 +192,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
     private static final String INTERACTION_JANK_TAG = "global_actions";
 
     private static final boolean SHOW_SILENT_TOGGLE = true;
+    private static final String FACTORY_RESET_REASON = "GlobalActionsDialogLite";
 
     /* Valid settings for restart actions keys.
      * see lineage-sdk config.xml config_restartActionsList */
@@ -620,6 +621,12 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
         }
     }
 
+    private boolean maybeAddFactoryResetAction(List<Action> actions) {
+        int beforeSize = actions.size();
+        addIfShouldShowAction(actions, new FactoryResetAction());
+        return actions.size() > beforeSize;
+    }
+
     @VisibleForTesting
     protected String[] getRestartActions() {
         return mResources.getStringArray(
@@ -654,6 +661,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
         ArraySet<String> addedKeys = new ArraySet<>();
         ArraySet<String> addedRestartKeys = new ArraySet<String>();
         List<Action> tempActions = new ArrayList<>();
+        boolean factoryResetAdded = false;
         CurrentUserProvider currentUser = new CurrentUserProvider();
 
         // make sure emergency affordance action is first, if needed
@@ -670,6 +678,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             }
             if (GLOBAL_ACTION_KEY_POWER.equals(actionKey)) {
                 addIfShouldShowAction(tempActions, shutdownAction);
+                factoryResetAdded |= maybeAddFactoryResetAction(tempActions);
             } else if (GLOBAL_ACTION_KEY_AIRPLANE.equals(actionKey)) {
                 addIfShouldShowAction(tempActions, mAirplaneModeOn);
             } else if (GLOBAL_ACTION_KEY_BUGREPORT.equals(actionKey)) {
@@ -724,6 +733,10 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             }
             // Add here so we don't add more than one.
             addedKeys.add(actionKey);
+        }
+
+        if (!factoryResetAdded) {
+            maybeAddFactoryResetAction(tempActions);
         }
 
         for (int i = 0; i < restartActions.length; i++) {
@@ -944,6 +957,68 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             mUiEventLogger.log(GlobalActionsEvent.GA_SHUTDOWN_PRESS);
             // shutdown by making sure radio and power are handled accordingly.
             mWindowManagerFuncs.shutdown();
+        }
+    }
+
+    private final class FactoryResetAction extends SinglePressAction {
+        FactoryResetAction() {
+            super(com.android.systemui.res.R.drawable.ic_warning,
+                    R.string.global_action_factory_reset);
+        }
+
+        @Override
+        public boolean showDuringKeyguard() {
+            return true;
+        }
+
+        @Override
+        public boolean showBeforeProvisioning() {
+            return true;
+        }
+
+        @Override
+        public boolean shouldShow() {
+            return !mDeviceProvisioned;
+        }
+
+        @Override
+        public void onPress() {
+            if (ActivityManager.isUserAMonkey()) {
+                return;
+            }
+            Log.i(TAG, "Factory reset option selected from global actions");
+            if (mDialog != null) {
+                mDialog.dismiss();
+            }
+            showFactoryResetConfirmDialog();
+        }
+    }
+
+    private void showFactoryResetConfirmDialog() {
+        SystemUIDialog dialog = new SystemUIDialog(mContext);
+        dialog.setTitle(R.string.global_action_factory_reset);
+        dialog.setMessage(mContext.getString(R.string.global_action_factory_reset_message));
+        dialog.setButton(DialogInterface.BUTTON_NEGATIVE,
+                mContext.getString(android.R.string.cancel), (d, which) -> d.dismiss());
+        dialog.setButton(DialogInterface.BUTTON_POSITIVE,
+                mContext.getString(R.string.global_action_factory_reset_confirm),
+                (d, which) -> {
+                    d.dismiss();
+                    sendFactoryResetBroadcast();
+                });
+        dialog.setCanceledOnTouchOutside(false);
+        dialog.show();
+    }
+
+    private void sendFactoryResetBroadcast() {
+        Intent intent = new Intent(Intent.ACTION_FACTORY_RESET);
+        intent.setPackage("android");
+        intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
+        intent.putExtra(Intent.EXTRA_REASON, FACTORY_RESET_REASON);
+        try {
+            mContext.sendBroadcastAsUser(intent, UserHandle.SYSTEM);
+        } catch (Exception e) {
+            Log.e(TAG, "Unable to send factory reset intent", e);
         }
     }
 
