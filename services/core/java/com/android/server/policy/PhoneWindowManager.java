@@ -481,6 +481,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     PowerManagerInternal mPowerManagerInternal;
     IStatusBarService mStatusBarService;
     StatusBarManagerInternal mStatusBarManagerInternal;
+    AudioManager mAudioManager;
     AudioManagerInternal mAudioManagerInternal;
     SensorPrivacyManager mSensorPrivacyManager;
     DisplayManager mDisplayManager;
@@ -1186,6 +1187,28 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             }
             return mAudioManagerInternal;
         }
+    }
+
+    private AudioManager getAudioManager() {
+        if (mAudioManager == null) {
+            mAudioManager = mContext.getSystemService(AudioManager.class);
+        }
+        return mAudioManager;
+    }
+
+    private boolean isMediaPlayingOrRoutedToExternalDevice() {
+        final AudioManager audioManager = getAudioManager();
+        if (audioManager == null) {
+            return false;
+        }
+        if (audioManager.isMusicActive()) {
+            return true;
+        }
+        final int devices = audioManager.getDevicesForStream(AudioManager.STREAM_MUSIC);
+        if (devices == 0) {
+            return false;
+        }
+	return (devices & (AudioManager.DEVICE_OUT_SPEAKER | AudioManager.DEVICE_OUT_EARPIECE)) == 0;
     }
 
     AccessibilityManagerInternal getAccessibilityManagerInternal() {
@@ -5522,7 +5545,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                 case KeyEvent.KEYCODE_DPAD_CENTER:
                 case KeyEvent.KEYCODE_DPAD_LEFT:
                 case KeyEvent.KEYCODE_DPAD_RIGHT:
-                    if (event.getRepeatCount() == 0) {
+                    if (isMediaPlayingOrRoutedToExternalDevice() && event.getRepeatCount() == 0) {
                         final int mediaKeyCode;
                         if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
                             mediaKeyCode = KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE;
@@ -5531,7 +5554,6 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                         } else {
                             mediaKeyCode = KeyEvent.KEYCODE_MEDIA_NEXT;
                         }
-
                         KeyEvent mediaKeyEvent = new KeyEvent(event.getDownTime(),
                                 event.getEventTime(), down ? KeyEvent.ACTION_DOWN
                                         : KeyEvent.ACTION_UP, mediaKeyCode, 0);
