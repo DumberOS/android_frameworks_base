@@ -237,6 +237,10 @@ public class QSImpl implements QS, CommandQueue.Callbacks, StatusBarStateControl
         }
 
         mQSPanelScrollView = mRootView.findViewById(R.id.expanded_qs_scroll_view);
+        // Prevent the large QS scroll container from ever taking focus; d-pad navigation should
+        // land on real tiles instead of highlighting the whole panel background.
+        mQSPanelScrollView.setFocusable(false);
+        mQSPanelScrollView.setFocusableInTouchMode(false);
         mQSPanelScrollView.addOnLayoutChangeListener(
                 (v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
                     updateQsBounds();
