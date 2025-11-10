@@ -338,8 +338,12 @@ public class LockIconViewController implements Dumpable {
     private void updateAccessibility() {
         if (mAccessibilityManager.isEnabled()) {
             mView.setOnClickListener(mA11yClickListener);
+            mView.setFocusable(true);
+            mView.setFocusableInTouchMode(true);
         } else {
             mView.setOnClickListener(null);
+            mView.setFocusable(false);
+            mView.setFocusableInTouchMode(false);
         }
     }
 

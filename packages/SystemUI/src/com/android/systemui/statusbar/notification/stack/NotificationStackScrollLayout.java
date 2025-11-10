@@ -2544,9 +2544,10 @@ public class NotificationStackScrollLayout extends ViewGroup implements Dumpable
 
     private void updateScrollability() {
         boolean scrollable = !mQsFullScreen && getScrollRange() > 0;
+        boolean shouldBeFocusable = scrollable && !mAmbientState.isOnKeyguard();
+        setFocusable(shouldBeFocusable);
         if (scrollable != mScrollable) {
             mScrollable = scrollable;
-            setFocusable(scrollable);
             updateForwardAndBackwardScrollability();
         }
     }
@@ -5241,6 +5242,7 @@ public class NotificationStackScrollLayout extends ViewGroup implements Dumpable
         mAmbientState.setStatusBarState(statusBarState);
         updateSpeedBumpIndex();
         updateDismissBehavior();
+        updateScrollability();
     }
 
     void setUpcomingStatusBarState(int upcomingStatusBarState) {
