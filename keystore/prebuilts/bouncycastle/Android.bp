@@ -1,0 +1,25 @@
+// frameworks/base/keystore/prebuilts/bouncycastle/Android.bp
+java_import {
+    name: "bouncycastle_asn1",
+    jars: ["bcprov.jar"],
+    sdk_version: "current",        // you’re targeting platform code, not the SDK
+    host_supported: true,       // if you ever run host‐side tests
+    compile_dex: true,         // no need for dex’ing in the platform
+    visibility: ["//visibility:public"],
+}
+
+java_import {
+    name: "bouncycastle_pkix",
+    jars: ["bcpkix.jar"],
+    sdk_version: "none",        // platform code
+    host_supported: true,       // if you run host tests
+    compile_dex: false,         // no dex in platform
+}
+
+java_import {
+    name: "bouncycastle_util",
+    jars: ["bcutil.jar"],
+    sdk_version: "none",        // platform code
+    host_supported: true,       // if you run host tests
+    compile_dex: false,         // no dex in platform
+}
