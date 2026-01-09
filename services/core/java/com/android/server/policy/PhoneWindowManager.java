@@ -1262,11 +1262,11 @@ public class PhoneWindowManager implements WindowManagerPolicy {
 
         mWindowManagerFuncs.onPowerKeyDown(interactive);
 
-        // Stop ringing or end call if configured to do so when power is pressed.
+        // Stop ringing or end call only when the screen is already on.
         TelecomManager telecomManager = getTelecommService();
         boolean hungUp = false;
         if (telecomManager != null) {
-            if (telecomManager.isRinging() || telecomManager.isInCall()) {
+            if (interactive && (telecomManager.isRinging() || telecomManager.isInCall())) {
                 hungUp = telecomManager.endCall();
             }
         }
