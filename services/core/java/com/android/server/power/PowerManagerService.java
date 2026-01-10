@@ -365,6 +365,7 @@ public final class PowerManagerService extends SystemService
     private float mButtonBrightness;
     private boolean mKeyboardVisible;
     private float mKeyboardBrightness;
+    private boolean mKeyboardBacklightEnabled = true;
 
     private boolean mButtonLightOnKeypressOnly;
 
@@ -1502,6 +1503,9 @@ public final class PowerManagerService extends SystemService
         resolver.registerContentObserver(Settings.System.getUriFor(
                 Settings.System.SCREEN_AUTO_BRIGHTNESS_ADJ),
                 false, mSettingsObserver, UserHandle.USER_ALL);
+        resolver.registerContentObserver(Settings.System.getUriFor(
+                Settings.System.KEYBOARD_BACKLIGHT_ENABLED),
+                false, mSettingsObserver, UserHandle.USER_ALL);
         resolver.registerContentObserver(Settings.Global.getUriFor(
                 Settings.Global.THEATER_MODE_ON),
                 false, mSettingsObserver, UserHandle.USER_ALL);
@@ -1686,6 +1690,8 @@ public final class PowerManagerService extends SystemService
         mKeyboardBrightness = LineageSettings.Secure.getFloatForUser(resolver,
                 LineageSettings.Secure.KEYBOARD_BRIGHTNESS, mKeyboardBrightnessDefault,
                 UserHandle.USER_CURRENT);
+        mKeyboardBacklightEnabled = Settings.System.getIntForUser(resolver,
+                Settings.System.KEYBOARD_BACKLIGHT_ENABLED, 1, UserHandle.USER_CURRENT) != 0;
 
         mForceNavbar = LineageSettings.System.getIntForUser(resolver,
                 LineageSettings.System.FORCE_SHOW_NAVBAR,
@@ -2632,6 +2638,7 @@ public final class PowerManagerService extends SystemService
                     break;
                 }
             }
+            updateKeyboardBacklightLocked();
 
             // Phase 2: Lock profiles that became inactive/not kept awake.
             updateProfilesLocked(now);
@@ -3105,20 +3112,6 @@ public final class PowerManagerService extends SystemService
                                 }
                             }
 
-                            if (mKeyboardLight != null) {
-                                float keyboardBrightness = BRIGHTNESS_OFF_FLOAT;
-                                if (isValidBrightness(mButtonBrightnessOverrideFromWindowManager)) {
-                                    if (mButtonBrightnessOverrideFromWindowManager >
-                                            PowerManager.BRIGHTNESS_MIN) {
-                                        keyboardBrightness =
-                                                mButtonBrightnessOverrideFromWindowManager;
-                                    }
-                                } else if (isValidKeyboardBrightness(mKeyboardBrightness)) {
-                                    keyboardBrightness = mKeyboardBrightness;
-                                }
-                                mKeyboardLight.setBrightness(mKeyboardVisible ?
-                                        keyboardBrightness : BRIGHTNESS_OFF_FLOAT);
-                            }
                         }
                     } else {
                         groupNextTimeout = lastUserActivityTime + screenOffTimeout;
@@ -3128,9 +3121,6 @@ public final class PowerManagerService extends SystemService
                                 if (mButtonsLight != null) {
                                     mButtonsLight.setBrightness(BRIGHTNESS_OFF_FLOAT);
                                     powerGroup.setButtonOnLocked(false);
-                                }
-                                if (mKeyboardLight != null) {
-                                    mKeyboardLight.setBrightness(BRIGHTNESS_OFF_FLOAT);
                                 }
                             }
                         }
@@ -3863,6 +3853,39 @@ public final class PowerManagerService extends SystemService
 
     private static boolean isValidKeyboardBrightness(float value) {
         return value > PowerManager.BRIGHTNESS_MIN && value <= PowerManager.BRIGHTNESS_MAX;
+    }
+
+    @GuardedBy("mLock")
+    private void updateKeyboardBacklightLocked() {
+        if (mKeyboardLight == null) {
+            return;
+        }
+        boolean screenOn = isDefaultDisplayOnLocked();
+        float keyboardBrightness = BRIGHTNESS_OFF_FLOAT;
+        if (mKeyboardBacklightEnabled && screenOn) {
+            if (isValidBrightness(mButtonBrightnessOverrideFromWindowManager)) {
+                if (mButtonBrightnessOverrideFromWindowManager > PowerManager.BRIGHTNESS_MIN) {
+                    keyboardBrightness = mButtonBrightnessOverrideFromWindowManager;
+                }
+            } else if (isValidKeyboardBrightness(mKeyboardBrightness)) {
+                keyboardBrightness = mKeyboardBrightness;
+            }
+        }
+        setKeyboardBacklightLocked(keyboardBrightness);
+    }
+
+    @GuardedBy("mLock")
+    private boolean isDefaultDisplayOnLocked() {
+        DisplayInfo displayInfo = mDisplayManagerInternal.getDisplayInfo(Display.DEFAULT_DISPLAY);
+        if (displayInfo == null) {
+            return PowerManagerInternal.isInteractive(getGlobalWakefulnessLocked());
+        }
+        return displayInfo.state == Display.STATE_ON;
+    }
+
+    @GuardedBy("mLock")
+    private void setKeyboardBacklightLocked(float keyboardBrightness) {
+        mKeyboardLight.setBrightness(keyboardBrightness);
     }
 
     @VisibleForTesting
@@ -4923,6 +4946,7 @@ public final class PowerManagerService extends SystemService
             pw.println("  mButtonBrightnessOverrideFromWindowManager="
                     + mButtonBrightnessOverrideFromWindowManager);
             pw.println("  mKeyboardBrightness=" + mKeyboardBrightness);
+            pw.println("  mKeyboardBacklightEnabled=" + mKeyboardBacklightEnabled);
             pw.println("  mScreenBrightnessOverrideFromWindowManager="
                     + mScreenBrightnessOverrideFromWindowManager);
             pw.println("  mUserActivityTimeoutOverrideFromWindowManager="

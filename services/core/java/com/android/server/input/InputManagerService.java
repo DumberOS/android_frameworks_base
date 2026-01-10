@@ -3577,6 +3577,13 @@ public class InputManagerService extends IInputManager.Stub
         mNative.setAccessibilityStickyKeysEnabled(enabled);
     }
 
+    /**
+     * Sets whether keyboard backlight is enabled.
+     */
+    public void setKeyboardBacklightEnabled(boolean enabled) {
+        mKeyboardBacklightController.setKeyboardBacklightEnabled(enabled);
+    }
+
     void setUseLargePointerIcons(boolean useLargeIcons) {
         mPointerIconCache.setUseLargePointerIcons(useLargeIcons);
     }
@@ -3588,6 +3595,7 @@ public class InputManagerService extends IInputManager.Stub
         default void unregisterKeyboardBacklightListener(IKeyboardBacklightListener l, int pid) {}
         default void onInteractiveChanged(boolean isInteractive) {}
         default void notifyUserActivity() {}
+        default void setKeyboardBacklightEnabled(boolean enabled) {}
         default void systemRunning() {}
         default void dump(PrintWriter pw) {}
     }
