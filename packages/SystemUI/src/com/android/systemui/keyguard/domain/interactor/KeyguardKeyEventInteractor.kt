@@ -81,12 +81,14 @@ constructor(
                 KeyEvent.KEYCODE_MENU -> return dispatchMenuKeyEvent()
             }
         }
-        if (shouldShowPinBouncer(event)) {
+        if (shouldHandlePinKey(event)) {
             digitFromKey(event)?.let {
-		PendingPinInput.addDigit(it)
-		Log.i("Dumbdroid", "Adding digit " + it)
-		}
-            statusBarKeyguardViewManager.showPrimaryBouncer(true)
+                PendingPinInput.addDigit(it)
+                Log.i("Dumbdroid", "Adding digit " + it)
+            }
+            if (!statusBarKeyguardViewManager.primaryBouncerIsOrWillBeShowing()) {
+                statusBarKeyguardViewManager.showPrimaryBouncer(true)
+            }
             return true
         }
         return false
@@ -163,11 +165,10 @@ constructor(
         }
     }
 
-    private fun shouldShowPinBouncer(event: KeyEvent): Boolean {
+    private fun shouldHandlePinKey(event: KeyEvent): Boolean {
         if (event.action != KeyEvent.ACTION_DOWN) return false
         if (statusBarStateController.state != StatusBarState.KEYGUARD) return false
         if (!isDeviceAwake()) return false
-        if (statusBarKeyguardViewManager.primaryBouncerIsOrWillBeShowing()) return false
 
         val mode = keyguardSecurityModel.getSecurityMode(selectedUserInteractor.getSelectedUserId())
         if (mode != KeyguardSecurityModel.SecurityMode.PIN) return false

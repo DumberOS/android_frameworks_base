@@ -34,6 +34,7 @@ import com.android.internal.util.LatencyTracker;
 import com.android.internal.widget.LockPatternUtils;
 import com.android.keyguard.KeyguardSecurityModel.SecurityMode;
 import com.android.keyguard.domain.interactor.KeyguardKeyboardInteractor;
+import com.android.systemui.keyguard.domain.interactor.PendingPinInput;
 import com.android.systemui.classifier.FalsingCollector;
 import com.android.systemui.flags.FeatureFlags;
 import com.android.systemui.res.R;
@@ -46,6 +47,7 @@ public abstract class KeyguardPinBasedInputViewController<T extends KeyguardPinB
     private final FalsingCollector mFalsingCollector;
     private final KeyguardKeyboardInteractor mKeyguardKeyboardInteractor;
     protected PasswordTextView mPasswordEntry;
+    private final PendingPinInput.Listener mPendingPinListener = this::onPendingPinChanged;
 
     private final OnKeyListener mOnKeyListener = (v, keyCode, event) -> {
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
@@ -148,6 +150,9 @@ public abstract class KeyguardPinBasedInputViewController<T extends KeyguardPinB
             layoutParams.height = (int) getResources().getDimension(
                     R.dimen.keyguard_pin_field_height);
         }
+
+        PendingPinInput.addListener(mPendingPinListener);
+        maybeAppendPendingPinInput();
     }
 
     private void setKeyboardBasedFocusOutline(boolean isAnyKeyboardConnected) {
@@ -174,6 +179,19 @@ public abstract class KeyguardPinBasedInputViewController<T extends KeyguardPinB
         for (NumPadKey button : mView.getButtons()) {
             button.setOnTouchListener(null);
         }
+
+        PendingPinInput.removeListener(mPendingPinListener);
+    }
+
+    private void onPendingPinChanged() {
+        maybeAppendPendingPinInput();
+    }
+
+    private void maybeAppendPendingPinInput() {
+        if (!mPasswordEntry.isEnabled()) {
+            return;
+        }
+        mView.appendPendingPinInput();
     }
 
     @Override
@@ -185,6 +203,7 @@ public abstract class KeyguardPinBasedInputViewController<T extends KeyguardPinB
         // it's guaranteed that the view has focus.
         mPasswordEntry.clearFocus();
         mPasswordEntry.requestFocus();
+        maybeAppendPendingPinInput();
     }
 
     @Override
