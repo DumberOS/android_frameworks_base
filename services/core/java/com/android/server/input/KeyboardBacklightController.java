@@ -71,6 +71,7 @@ final class KeyboardBacklightController implements
     private static final int MSG_NOTIFY_USER_ACTIVITY = 4;
     private static final int MSG_NOTIFY_USER_INACTIVITY = 5;
     private static final int MSG_INTERACTIVE_STATE_CHANGED = 6;
+    private static final int MSG_SET_KEYBOARD_BACKLIGHT_ENABLED = 7;
     private static final int MAX_BRIGHTNESS = 255;
     private static final int DEFAULT_NUM_BRIGHTNESS_CHANGE_STEPS = 10;
     @VisibleForTesting
@@ -101,6 +102,8 @@ final class KeyboardBacklightController implements
     private boolean mIsBacklightOn = false;
     // Maintains state if currently the device is interactive or not
     private boolean mIsInteractive = true;
+    // Maintains state if keyboard backlight is enabled via settings.
+    private boolean mKeyboardBacklightEnabled = true;
 
     // List of currently registered keyboard backlight listeners
     @GuardedBy("mKeyboardBacklightListenerRecords")
@@ -192,7 +195,17 @@ final class KeyboardBacklightController implements
         mHandler.sendMessage(msg);
     }
 
+    @Override
+    public void setKeyboardBacklightEnabled(boolean enabled) {
+        Message msg = Message.obtain(mHandler, MSG_SET_KEYBOARD_BACKLIGHT_ENABLED,
+                enabled ? 1 : 0, 0);
+        mHandler.sendMessage(msg);
+    }
+
     private void updateKeyboardBacklight(int deviceId, Direction direction) {
+        if (!mKeyboardBacklightEnabled) {
+            return;
+        }
         InputDevice inputDevice = getInputDevice(deviceId);
         KeyboardBacklightState state = mKeyboardBacklights.get(deviceId);
         if (inputDevice == null || state == null) {
@@ -324,6 +337,18 @@ final class KeyboardBacklightController implements
         updateAmbientLightListener();
     }
 
+    private void handleKeyboardBacklightEnabled(boolean enabled) {
+        if (mKeyboardBacklightEnabled == enabled) {
+            return;
+        }
+        mKeyboardBacklightEnabled = enabled;
+        for (int i = 0; i < mKeyboardBacklights.size(); i++) {
+            KeyboardBacklightState state = mKeyboardBacklights.valueAt(i);
+            state.onBacklightStateChanged();
+        }
+        updateAmbientLightListener();
+    }
+
     @VisibleForTesting
     public void handleAmbientLightValueChanged(int brightnessValue) {
         mAmbientBacklightValue = brightnessValue;
@@ -354,6 +379,9 @@ final class KeyboardBacklightController implements
                 return true;
             case MSG_INTERACTIVE_STATE_CHANGED:
                 handleInteractiveStateChange((boolean) msg.obj);
+                return true;
+            case MSG_SET_KEYBOARD_BACKLIGHT_ENABLED:
+                handleKeyboardBacklightEnabled(msg.arg1 != 0);
                 return true;
         }
         return false;
@@ -478,6 +506,7 @@ final class KeyboardBacklightController implements
             needToListenAmbientLightSensor |= mKeyboardBacklights.valueAt(i).mUseAmbientController;
         }
         needToListenAmbientLightSensor &= mIsInteractive;
+        needToListenAmbientLightSensor &= mKeyboardBacklightEnabled;
         if (needToListenAmbientLightSensor && mAmbientListener == null) {
             mAmbientListener = this::handleAmbientLightValueChanged;
             mAmbientController.registerAmbientBacklightListener(mAmbientListener);
@@ -597,19 +626,19 @@ final class KeyboardBacklightController implements
         private void onBacklightStateChanged() {
             int toValue = mUseAmbientController ? mAmbientBacklightValue
                     : mBrightnessValueForLevel[mBrightnessLevel];
-            setBacklightValue(mIsBacklightOn ? toValue : 0);
+            setBacklightValue((mIsBacklightOn && mKeyboardBacklightEnabled) ? toValue : 0);
         }
         private void setBrightnessLevel(int brightnessLevel) {
             // Once we manually set level, disregard ambient light controller
             mUseAmbientController = false;
-            if (mIsBacklightOn) {
+            if (mIsBacklightOn && mKeyboardBacklightEnabled) {
                 setBacklightValue(mBrightnessValueForLevel[brightnessLevel]);
             }
             mBrightnessLevel = brightnessLevel;
         }
 
         private void onAmbientBacklightValueChanged() {
-            if (mIsBacklightOn && mUseAmbientController) {
+            if (mIsBacklightOn && mUseAmbientController && mKeyboardBacklightEnabled) {
                 setBacklightValue(mAmbientBacklightValue);
             }
         }

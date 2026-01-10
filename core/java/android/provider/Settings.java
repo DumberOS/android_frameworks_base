@@ -5310,6 +5310,14 @@ public final class Settings {
         public static final String KEYBOARD_VIBRATION_ENABLED = "keyboard_vibration_enabled";
 
         /**
+         * Whether keyboard backlight is enabled. The value is boolean (1 or 0).
+         *
+         * @hide
+         */
+        @Readable
+        public static final String KEYBOARD_BACKLIGHT_ENABLED = "keyboard_backlight_enabled";
+
+        /**
          * Ringer volume. This is used internally, changing this value will not
          * change the volume. See AudioManager.
          *
