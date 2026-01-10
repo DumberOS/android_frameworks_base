@@ -898,6 +898,13 @@ public final class NotificationAttentionHelper {
             if (ledNotification == null) {
                 Slog.wtfStack(TAG, "LED Notification does not exist: " + owner);
                 mLights.remove(owner);
+            } else if (mLineageNotificationLights != null
+                    && !isLedForcedOn(ledNotification)
+                    && !mLineageNotificationLights.isNotificationAllowed(
+                            ledNotification.getSbn().getPackageName(),
+                            ledNotification.getSbn().getNotification())) {
+                mLights.remove(owner);
+                ledNotification = null;
             }
         }
 
