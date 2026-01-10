@@ -80,8 +80,11 @@ public abstract class KeyguardPinBasedInputView extends KeyguardAbsKeyInputView 
     protected void setPasswordEntryEnabled(boolean enabled) {
         mPasswordEntry.setEnabled(enabled);
         mOkButton.setEnabled(enabled);
-        if (enabled && !mPasswordEntry.hasFocus()) {
-            mPasswordEntry.requestFocus();
+        if (enabled) {
+            if (!mPasswordEntry.hasFocus()) {
+                mPasswordEntry.requestFocus();
+            }
+            appendPendingPinInput();
         }
     }
 
@@ -91,6 +94,7 @@ public abstract class KeyguardPinBasedInputView extends KeyguardAbsKeyInputView 
         mOkButton.setEnabled(enabled);
         if (enabled) {
             mPasswordEntry.requestFocus();
+            appendPendingPinInput();
         }
     }
 
@@ -174,9 +178,21 @@ public abstract class KeyguardPinBasedInputView extends KeyguardAbsKeyInputView 
         }
     }
 
+    void appendPendingPinInput() {
+        if (!mPasswordEntry.isEnabled() || !isShown()) {
+            return;
+        }
+        String pending = PendingPinInput.take();
+        if (pending.isEmpty()) {
+            return;
+        }
+        for (int i = 0; i < pending.length(); i++) {
+            mPasswordEntry.append(pending.charAt(i));
+        }
+    }
+
     @Override
     protected void resetPasswordText(boolean animate, boolean announce) {
-	PendingPinInput.reset();
         mPasswordEntry.reset(animate, announce);
     }
 

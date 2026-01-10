@@ -209,6 +209,11 @@ public abstract class BasePasswordTextView extends FrameLayout {
 
         mPinShapeInput = inflatePinShapeInput(isPinHinting);
         addView(mPinShapeInput.getView());
+
+        int length = mText.length();
+        for (int i = 0; i < length; i++) {
+            mPinShapeInput.append();
+        }
     }
 
     /** Controls whether the last entered digit is briefly shown after being entered */
