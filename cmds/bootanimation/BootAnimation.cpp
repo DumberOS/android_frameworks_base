@@ -1766,12 +1766,11 @@ bool BootAnimation::playAnimation(const Animation& animation) {
 
                 if (animation.progressFont.texture.name != 0) {
                     int vx = TEXT_CENTER_VALUE;
-                    int vy = 15;
+                    int vy = 10;
 		    std::string bootTimeLabel = std::to_string(elapsedRealtime() / 1000) + "s";
-                    drawText(bootTimeLabel.c_str(), animation.progressFont, false, &vx, &vy);
+                    //drawText(bootTimeLabel.c_str(), animation.progressFont, false, &vx, &vy);
 
                     vx = TEXT_CENTER_VALUE;
-                    vy += 40;
                     drawText(mVersionLabel.c_str(), animation.progressFont, false, &vx, &vy);
                 }
                 handleViewport(frameDuration);
