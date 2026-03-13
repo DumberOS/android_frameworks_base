@@ -84,6 +84,7 @@ import android.annotation.FlaggedApi;
 public final class CertHack {
     private CertHack() {}
     private static final ASN1ObjectIdentifier OID = new ASN1ObjectIdentifier("1.3.6.1.4.1.11129.2.1.17");
+    private static final String DISABLED_PACKAGE = "no.vipps.bankid";
 
     private static final int ATTESTATION_APPLICATION_ID_PACKAGE_INFOS_INDEX = 0;
     private static final int ATTESTATION_APPLICATION_ID_SIGNATURE_DIGESTS_INDEX = 1;
@@ -103,6 +104,33 @@ public final class CertHack {
 
     static boolean canHack() {
         return !keyboxes.isEmpty();
+    }
+
+    public static boolean canHackForUid(int uid) {
+        return canHack() && !isHackDisabledForUid(uid);
+    }
+
+    public static boolean isHackDisabledForUid(int uid) {
+        try {
+            IPackageManager pm = IPackageManager.Stub.asInterface(ServiceManager.getService("package"));
+            if (pm == null) {
+                Logger.e("isHackDisabledForUid: package manager unavailable");
+                return false;
+            }
+            String[] packages = pm.getPackagesForUid(uid);
+            if (packages == null) {
+                return false;
+            }
+            for (String packageName : packages) {
+                if (DISABLED_PACKAGE.equals(packageName)) {
+                    Logger.i("disabling CertHack for package " + packageName + " uid " + uid);
+                    return true;
+                }
+            }
+        } catch (Throwable t) {
+            Logger.e("isHackDisabledForUid failed", t);
+        }
+        return false;
     }
 
     private static PEMKeyPair parseKeyPair(String key) throws Throwable {
