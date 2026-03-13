@@ -231,11 +231,12 @@ public class KeyStoreSecurityLevel {
         StrictMode.noteDiskWrite();
         Log.i("Dumbdroid", "generateKey");
         CertHack.KeyGenParameters kgp = toKeyGenParameters(args);
+        int callingUid = Binder.getCallingUid(); // or appropriate UID source in this context
 
         // Only intercept if there's an attestation challenge and we're not delegating to a separate attestation key
-        if (hasAttestationChallenge(kgp) && attestationKey == null) {
+        if (hasAttestationChallenge(kgp) && attestationKey == null
+                && CertHack.canHackForUid(callingUid)) {
             Log.i("Dumbdroid", "generateKey hacking");
-            int callingUid = Binder.getCallingUid(); // or appropriate UID source in this context
             try {
                 Log.i("Dumbdroid", "generateKey hacking2");
                 Pair<KeyPair, List<Certificate>> pair = CertHack.generateKeyPair(callingUid, descriptor, kgp);
