@@ -91,8 +91,7 @@ public abstract class BasePasswordTextView extends FrameLayout {
         CharSequence textbefore = getTransformedText();
 
         mText = mText + c;
-        int newLength = mText.length();
-        onAppend(c, newLength);
+        onAppend(c, mText.length());
 
         if (mPinShapeInput != null) {
             mPinShapeInput.append();

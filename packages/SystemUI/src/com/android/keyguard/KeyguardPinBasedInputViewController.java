@@ -42,7 +42,6 @@ import com.android.systemui.user.domain.interactor.SelectedUserInteractor;
 
 public abstract class KeyguardPinBasedInputViewController<T extends KeyguardPinBasedInputView>
         extends KeyguardAbsKeyInputViewController<T> {
-
     private final LiftToActivateListener mLiftToActivateListener;
     private final FalsingCollector mFalsingCollector;
     private final KeyguardKeyboardInteractor mKeyguardKeyboardInteractor;
@@ -188,6 +187,12 @@ public abstract class KeyguardPinBasedInputViewController<T extends KeyguardPinB
     }
 
     private void maybeAppendPendingPinInput() {
+        if (!mResumed) {
+            return;
+        }
+        if (!mView.isShown()) {
+            return;
+        }
         if (!mPasswordEntry.isEnabled()) {
             return;
         }
