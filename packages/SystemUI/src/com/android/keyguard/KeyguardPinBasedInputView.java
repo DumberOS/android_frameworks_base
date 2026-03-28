@@ -36,7 +36,6 @@ import android.graphics.Rect;
 import android.util.AttributeSet;
 import android.view.KeyEvent;
 import android.view.View;
-import android.util.Log;
 
 import androidx.annotation.CallSuper;
 
@@ -52,7 +51,6 @@ import java.util.List;
  * A Pin based Keyguard input view
  */
 public abstract class KeyguardPinBasedInputView extends KeyguardAbsKeyInputView {
-
     protected PasswordTextView mPasswordEntry;
     private NumPadButton mOkButton;
     private NumPadButton mDeleteButton;
@@ -105,7 +103,7 @@ public abstract class KeyguardPinBasedInputView extends KeyguardAbsKeyInputView 
         if (keyCode == KeyEvent.KEYCODE_BACK) {
             if (mPasswordEntry.getText().length() > 0 && mPasswordEntry.isEnabled()) {
                 mPasswordEntry.deleteLastChar();
-		mConsumeBackKeyUp = true;
+                mConsumeBackKeyUp = true;
                 return true;
             }
             return super.onKeyDown(keyCode, event);
@@ -116,11 +114,19 @@ public abstract class KeyguardPinBasedInputView extends KeyguardAbsKeyInputView 
         }
         if (keyCode >= KeyEvent.KEYCODE_0 && keyCode <= KeyEvent.KEYCODE_9) {
             int number = keyCode - KeyEvent.KEYCODE_0;
+            if (!PendingPinInput.get().isEmpty()) {
+                PendingPinInput.addDigit((char) ('0' + number));
+                return true;
+            }
             performNumberClick(number);
             return true;
         }
         if (keyCode >= KeyEvent.KEYCODE_NUMPAD_0 && keyCode <= KeyEvent.KEYCODE_NUMPAD_9) {
             int number = keyCode - KeyEvent.KEYCODE_NUMPAD_0;
+            if (!PendingPinInput.get().isEmpty()) {
+                PendingPinInput.addDigit((char) ('0' + number));
+                return true;
+            }
             performNumberClick(number);
             return true;
         }
@@ -132,7 +138,7 @@ public abstract class KeyguardPinBasedInputView extends KeyguardAbsKeyInputView 
         if (keyCode == KeyEvent.KEYCODE_BACK && mConsumeBackKeyUp) {
             mConsumeBackKeyUp = false;
             return true;
-	}
+        }
         if (KeyEvent.isConfirmKey(keyCode)) {
             mOkButton.performClick();
             return true;

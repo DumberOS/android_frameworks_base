@@ -85,6 +85,7 @@ import com.android.systemui.deviceentry.domain.interactor.DeviceEntryInteractor;
 import com.android.systemui.flags.FeatureFlags;
 import com.android.systemui.flags.Flags;
 import com.android.systemui.keyguard.KeyguardWmStateRefactor;
+import com.android.systemui.keyguard.domain.interactor.PendingPinInput;
 import com.android.systemui.keyguard.domain.interactor.KeyguardTransitionInteractor;
 import com.android.systemui.log.SessionTracker;
 import com.android.systemui.plugins.ActivityStarter;
@@ -837,6 +838,7 @@ public class KeyguardSecurityContainerController extends ViewController<Keyguard
     /** Called when the bouncer changes visibility. */
     public void onBouncerVisibilityChanged(boolean isVisible) {
         if (!isVisible) {
+            PendingPinInput.reset();
             mView.resetScale();
         }
     }

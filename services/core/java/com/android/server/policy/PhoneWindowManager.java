@@ -192,10 +192,12 @@ import android.util.MutableBoolean;
 import android.util.PrintWriterPrinter;
 import android.util.Slog;
 import android.util.SparseArray;
+import android.util.SparseIntArray;
 import android.util.proto.ProtoOutputStream;
 import android.view.Display;
 import android.view.HapticFeedbackConstants;
 import android.view.IDisplayFoldListener;
+import android.view.IWindowManager;
 import android.view.InputDevice;
 import android.view.KeyCharacterMap;
 import android.view.KeyCharacterMap.FallbackAction;
@@ -582,6 +584,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     // Used to hold the last user key used to wake the device.  This helps us prevent up events
     // from being passed to the foregrounded app without a corresponding down event
     volatile int mPendingWakeKey = PENDING_KEY_NULL;
+    private final Object mBufferedNumericWakeLock = new Object();
+    private final ArrayList<KeyEvent> mBufferedNumericWakeKeys = new ArrayList<>();
+    private final SparseIntArray mBufferedNumericWakeKeyUps = new SparseIntArray();
 
     int mRecentAppsHeldModifiers;
 
@@ -827,6 +832,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     private static final int MSG_SWITCH_KEYBOARD_LAYOUT = 25;
     private static final int MSG_LOG_KEYBOARD_SYSTEM_EVENT = 26;
     private static final int MSG_SET_DEFERRED_KEY_ACTIONS_EXECUTABLE = 27;
+    private static final int MSG_REPLAY_BUFFERED_NUMERIC_WAKE_KEYS = 28;
 
     // Lineage additions
     private static final int MSG_TOGGLE_TORCH = 100;
@@ -936,6 +942,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                     final int keyCode = msg.arg1;
                     final long downTime = (Long) msg.obj;
                     mDeferredKeyActionExecutor.setActionsExecutable(keyCode, downTime);
+                    break;
+                case MSG_REPLAY_BUFFERED_NUMERIC_WAKE_KEYS:
+                    replayBufferedNumericWakeKeys();
                     break;
                 case MSG_TOGGLE_TORCH:
                     toggleTorch();
@@ -3319,7 +3328,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
 
         mBackLongPressAction = Action.fromIntSafe(res.getInteger(
                 org.lineageos.platform.internal.R.integer.config_longPressOnBackBehavior));
-        if (mBackLongPressAction.ordinal() > Action.SLEEP.ordinal()) {
+        if (mBackLongPressAction.ordinal() > Action.KILL_APP.ordinal()) {
             mBackLongPressAction = Action.NOTHING;
         }
 
@@ -3329,13 +3338,13 @@ public class PhoneWindowManager implements WindowManagerPolicy {
 
         mHomeLongPressAction = Action.fromIntSafe(res.getInteger(
                 org.lineageos.platform.internal.R.integer.config_longPressOnHomeBehavior));
-        if (mHomeLongPressAction.ordinal() > Action.SLEEP.ordinal()) {
+        if (mHomeLongPressAction.ordinal() > Action.KILL_APP.ordinal()) {
             mHomeLongPressAction = Action.NOTHING;
         }
 
         mHomeDoubleTapAction = Action.fromIntSafe(res.getInteger(
                 org.lineageos.platform.internal.R.integer.config_doubleTapOnHomeBehavior));
-        if (mHomeDoubleTapAction.ordinal() > Action.SLEEP.ordinal()) {
+        if (mHomeDoubleTapAction.ordinal() > Action.KILL_APP.ordinal()) {
             mHomeDoubleTapAction = Action.NOTHING;
         }
 
@@ -4599,6 +4608,103 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         upEvent.recycle();
     }
 
+    private boolean shouldBufferNumericWakeKey(boolean interactive, boolean allowNumberKeyWake,
+            boolean down) {
+        if (!down || !allowNumberKeyWake) {
+            return false;
+        }
+        if (!interactive) {
+            return true;
+        }
+        synchronized (mBufferedNumericWakeLock) {
+            return !mBufferedNumericWakeKeys.isEmpty();
+        }
+    }
+
+    private void bufferNumericWakeKey(KeyEvent event) {
+        synchronized (mBufferedNumericWakeLock) {
+            mBufferedNumericWakeKeys.add(KeyEvent.obtain(event));
+            final int keyCode = event.getKeyCode();
+            mBufferedNumericWakeKeyUps.put(keyCode, mBufferedNumericWakeKeyUps.get(keyCode) + 1);
+        }
+    }
+
+    private boolean shouldConsumeBufferedNumericWakeKeyUp(int keyCode, boolean down) {
+        if (down) {
+            return false;
+        }
+        synchronized (mBufferedNumericWakeLock) {
+            final int count = mBufferedNumericWakeKeyUps.get(keyCode);
+            if (count <= 0) {
+                return false;
+            }
+            if (count == 1) {
+                mBufferedNumericWakeKeyUps.delete(keyCode);
+            } else {
+                mBufferedNumericWakeKeyUps.put(keyCode, count - 1);
+            }
+            return true;
+        }
+    }
+
+    private void scheduleReplayBufferedNumericWakeKeys() {
+        synchronized (mBufferedNumericWakeLock) {
+            if (mBufferedNumericWakeKeys.isEmpty()) {
+                return;
+            }
+        }
+        mHandler.removeMessages(MSG_REPLAY_BUFFERED_NUMERIC_WAKE_KEYS);
+        Message msg = mHandler.obtainMessage(MSG_REPLAY_BUFFERED_NUMERIC_WAKE_KEYS);
+        msg.setAsynchronous(true);
+        mHandler.sendMessage(msg);
+    }
+
+    @SuppressLint("MissingPermission")
+    private void replayBufferedNumericWakeKeys() {
+        final ArrayList<KeyEvent> bufferedKeys;
+        synchronized (mBufferedNumericWakeLock) {
+            if (mBufferedNumericWakeKeys.isEmpty()) {
+                return;
+            }
+            bufferedKeys = new ArrayList<>(mBufferedNumericWakeKeys);
+            mBufferedNumericWakeKeys.clear();
+            mBufferedNumericWakeKeyUps.clear();
+        }
+
+        long eventTime = SystemClock.uptimeMillis();
+        for (KeyEvent bufferedKey : bufferedKeys) {
+            final KeyEvent downEvent = new KeyEvent(
+                    eventTime,
+                    eventTime,
+                    KeyEvent.ACTION_DOWN,
+                    bufferedKey.getKeyCode(),
+                    0,
+                    bufferedKey.getMetaState(),
+                    bufferedKey.getDeviceId(),
+                    bufferedKey.getScanCode(),
+                    bufferedKey.getFlags() | KeyEvent.FLAG_FROM_SYSTEM,
+                    bufferedKey.getSource());
+            eventTime += 1;
+            final KeyEvent upEvent = KeyEvent.changeTimeRepeat(downEvent, eventTime, 0);
+            final KeyEvent replayUpEvent = KeyEvent.changeAction(upEvent, KeyEvent.ACTION_UP);
+
+            mInputManager.injectInputEvent(downEvent, InputManager.INJECT_INPUT_EVENT_MODE_ASYNC);
+            mInputManager.injectInputEvent(replayUpEvent,
+                    InputManager.INJECT_INPUT_EVENT_MODE_ASYNC);
+            bufferedKey.recycle();
+        }
+    }
+
+    private void clearBufferedNumericWakeKeys() {
+        synchronized (mBufferedNumericWakeLock) {
+            for (KeyEvent bufferedKey : mBufferedNumericWakeKeys) {
+                bufferedKey.recycle();
+            }
+            mBufferedNumericWakeKeys.clear();
+            mBufferedNumericWakeKeyUps.clear();
+        }
+    }
+
     private boolean handleHomeShortcuts(IBinder focusedToken, KeyEvent event) {
         // First we always handle the home key here, so applications
         // can never break it, although if keyguard is on, we do let
@@ -5418,6 +5524,10 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         final boolean keyguardActive = (mKeyguardDelegate != null
                 && (interactive ? isKeyguardShowingAndNotOccluded() :
                 mKeyguardDelegate.isShowing()));
+        final boolean shouldBufferNumericWakeKey = shouldBufferNumericWakeKey(
+                interactive, allowNumberKeyWake, down);
+        final boolean consumeBufferedNumericWakeKeyUp = shouldConsumeBufferedNumericWakeKeyUp(
+                keyCode, down);
 
         if (DEBUG_INPUT) {
             Log.d(TAG, "interceptKeyTq keycode=" + keyCode
@@ -5475,6 +5585,17 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                     mPendingWakeKey = keyCode;
                 }
             }
+        }
+
+        if (shouldBufferNumericWakeKey) {
+            bufferNumericWakeKey(event);
+            result &= ~ACTION_PASS_TO_USER;
+            if (!interactive) {
+                mPendingWakeKey = keyCode;
+            }
+        }
+        if (consumeBufferedNumericWakeKeyUp) {
+            result &= ~ACTION_PASS_TO_USER;
         }
 
         // If the key would be handled globally, just return the result, don't worry about special
@@ -6650,6 +6771,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         if (DEBUG_WAKEUP) Slog.i(TAG, "Display" + displayId + " turned off...");
 
         if (displayId == DEFAULT_DISPLAY) {
+            clearBufferedNumericWakeKeys();
             updateScreenOffSleepToken(true, isSwappingDisplay);
             mRequestedOrSleepingDefaultDisplay = false;
             mDefaultDisplayPolicy.screenTurnedOff();
@@ -6798,6 +6920,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         Trace.asyncTraceEnd(Trace.TRACE_TAG_WINDOW_MANAGER, "screenTurningOn", 0 /* cookie */);
 
         enableScreen(listener, true /* report */);
+        scheduleReplayBufferedNumericWakeKeys();
     }
 
     private void enableScreen(ScreenOnListener listener, boolean report) {

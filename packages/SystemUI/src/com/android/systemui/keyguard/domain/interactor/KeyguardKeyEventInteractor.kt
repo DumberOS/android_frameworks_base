@@ -16,11 +16,9 @@
 
 package com.android.systemui.keyguard.domain.interactor
 
-import android.util.Log
 import android.content.Context
 import android.media.AudioManager
 import android.view.KeyEvent
-import com.android.systemui.keyguard.domain.interactor.PendingPinInput
 import com.android.keyguard.KeyguardSecurityModel
 import com.android.systemui.user.domain.interactor.SelectedUserInteractor
 import com.android.systemui.back.domain.interactor.BackActionInteractor
@@ -82,10 +80,7 @@ constructor(
             }
         }
         if (shouldHandlePinKey(event)) {
-            digitFromKey(event)?.let {
-                PendingPinInput.addDigit(it)
-                Log.i("Dumbdroid", "Adding digit " + it)
-            }
+            digitFromKey(event)?.let { PendingPinInput.addDigit(it) }
             if (!statusBarKeyguardViewManager.primaryBouncerIsOrWillBeShowing()) {
                 statusBarKeyguardViewManager.showPrimaryBouncer(true)
             }
@@ -177,5 +172,4 @@ constructor(
         return (code in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9) ||
             (code in KeyEvent.KEYCODE_NUMPAD_0..KeyEvent.KEYCODE_NUMPAD_9)
     }
-
 }

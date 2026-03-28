@@ -47,6 +47,7 @@ interface BouncerViewDelegate {
     fun dispatchBackKeyEventPreIme(): Boolean
     fun showNextSecurityScreenOrFinish(): Boolean
     fun resume()
+    fun reset()
     fun setDismissAction(
         onDismissAction: ActivityStarter.OnDismissAction?,
         cancelAction: Runnable?,

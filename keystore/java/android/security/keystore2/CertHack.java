@@ -84,7 +84,7 @@ import android.annotation.FlaggedApi;
 public final class CertHack {
     private CertHack() {}
     private static final ASN1ObjectIdentifier OID = new ASN1ObjectIdentifier("1.3.6.1.4.1.11129.2.1.17");
-    private static final String DISABLED_PACKAGE = "no.vipps.bankid";
+    private static final Set<String> DISABLED_PACKAGE = Set.of("no.vipps.bankid", "no.dnb.vipps");
 
     private static final int ATTESTATION_APPLICATION_ID_PACKAGE_INFOS_INDEX = 0;
     private static final int ATTESTATION_APPLICATION_ID_SIGNATURE_DIGESTS_INDEX = 1;
@@ -122,7 +122,7 @@ public final class CertHack {
                 return false;
             }
             for (String packageName : packages) {
-                if (DISABLED_PACKAGE.equals(packageName)) {
+                if (DISABLED_PACKAGE.contains(packageName)) {
                     Logger.i("disabling CertHack for package " + packageName + " uid " + uid);
                     return true;
                 }

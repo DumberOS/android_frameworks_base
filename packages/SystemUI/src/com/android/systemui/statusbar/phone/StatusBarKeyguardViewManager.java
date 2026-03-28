@@ -729,6 +729,9 @@ public class StatusBarKeyguardViewManager implements RemoteInputController.Callb
     @VisibleForTesting
     void hideBouncer(boolean destroyView) {
         mPrimaryBouncerInteractor.hide();
+        if (destroyView && mPrimaryBouncerView.getDelegate() != null) {
+            mPrimaryBouncerView.getDelegate().reset();
+        }
         if (mKeyguardStateController.isShowing()) {
             // If we were showing the bouncer and then aborting, we need to also clear out any
             // potential actions unless we actually unlocked.
@@ -959,7 +962,7 @@ public class StatusBarKeyguardViewManager implements RemoteInputController.Callb
 
     @Override
     public void onFinishedGoingToSleep() {
-        mPrimaryBouncerInteractor.hide();
+        hideBouncer(true /* destroyView */);
     }
 
     @Override

@@ -93,6 +93,12 @@ object KeyguardBouncerViewBinder {
                     securityContainerController.onResume(KeyguardSecurityView.SCREEN_ON)
                 }
 
+                override fun reset() {
+                    securityContainerController.onBouncerVisibilityChanged(/* isVisible= */ false)
+                    securityContainerController.reset()
+                    securityContainerController.onPause()
+                }
+
                 override fun setDismissAction(
                     onDismissAction: ActivityStarter.OnDismissAction?,
                     cancelAction: Runnable?
