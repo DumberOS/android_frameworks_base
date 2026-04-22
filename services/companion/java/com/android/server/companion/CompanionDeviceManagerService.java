@@ -47,6 +47,7 @@ import static com.android.server.companion.utils.PermissionsUtils.enforceCallerC
 import static com.android.server.companion.utils.PermissionsUtils.enforceCallerIsSystemOr;
 import static com.android.server.companion.utils.PermissionsUtils.enforceCallerIsSystemOrCanInteractWithUserId;
 import static com.android.server.companion.utils.PermissionsUtils.sanitizeWithCallerChecks;
+import static com.android.server.companion.utils.RolesUtils.NLS_PROFILES;
 
 import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.TimeUnit.DAYS;
@@ -552,17 +553,20 @@ public class CompanionDeviceManagerService extends SystemService {
             // Revoke NLS if the last association has been removed for the package
             Binder.withCleanCallingIdentity(() -> {
                 if (mAssociationStore.getAssociationsForPackage(userId, packageName).isEmpty()) {
-                    NotificationManager nm = getContext().getSystemService(
-                        NotificationManager.class);
-                    Intent nlsIntent = new Intent(
-                            NotificationListenerService.SERVICE_INTERFACE);
-                    List<ResolveInfo> matchedServiceList = getContext().getPackageManager()
-                            .queryIntentServicesAsUser(nlsIntent, /* flags */ 0, userId);
-                    for (ResolveInfo service : matchedServiceList) {
-                        if (service.getComponentInfo().getComponentName().getPackageName()
-                                .equals(packageName)) {
-                            nm.setNotificationListenerAccessGranted(
-                                    service.getComponentInfo().getComponentName(), false);
+                    if (association.getDeviceProfile() != null
+                        && NLS_PROFILES.contains(association.getDeviceProfile())) {
+                        NotificationManager nm = getContext().getSystemService(
+                                NotificationManager.class);
+                        Intent nlsIntent = new Intent(
+                                NotificationListenerService.SERVICE_INTERFACE);
+                        List<ResolveInfo> matchedServiceList = getContext().getPackageManager()
+                                .queryIntentServicesAsUser(nlsIntent, /* flags */ 0, userId);
+                        for (ResolveInfo service : matchedServiceList) {
+                            if (service.getComponentInfo().getComponentName().getPackageName()
+                                    .equals(packageName)) {
+                                nm.setNotificationListenerAccessGranted(
+                                        service.getComponentInfo().getComponentName(), false, false);
+                            }
                         }
                     }
                 }
@@ -1085,18 +1089,28 @@ public class CompanionDeviceManagerService extends SystemService {
 
         @Override
         public void enablePermissionsSync(int associationId) {
+            if (getCallingUid() != SYSTEM_UID) {
+                throw new SecurityException("Caller must be system UID");
+            }
             getAssociationWithCallerChecks(associationId);
             mSystemDataTransferProcessor.enablePermissionsSync(associationId);
         }
 
         @Override
         public void disablePermissionsSync(int associationId) {
+            if (getCallingUid() != SYSTEM_UID) {
+                throw new SecurityException("Caller must be system UID");
+            }
             getAssociationWithCallerChecks(associationId);
             mSystemDataTransferProcessor.disablePermissionsSync(associationId);
         }
 
         @Override
         public PermissionSyncRequest getPermissionSyncRequest(int associationId) {
+            if (getCallingUid() != SYSTEM_UID) {
+                throw new SecurityException("Caller must be system UID");
+            }
+
             // TODO: temporary fix, will remove soon
             AssociationInfo association = mAssociationStore.getAssociationById(associationId);
             if (association == null) {
@@ -1265,6 +1279,11 @@ public class CompanionDeviceManagerService extends SystemService {
 
         @Override
         public void setAssociationTag(int associationId, String tag) {
+            if (tag.length() > 1024) {
+                throw new IllegalArgumentException("Length of the tag must be at most"
+                    + 1024 + " characters");
+            }
+
             AssociationInfo association = getAssociationWithCallerChecks(associationId);
             association = (new AssociationInfo.Builder(association)).setTag(tag).build();
             mAssociationStore.updateAssociation(association);
@@ -1278,12 +1297,18 @@ public class CompanionDeviceManagerService extends SystemService {
         @Override
         public byte[] getBackupPayload(int userId) {
             Log.i(TAG, "getBackupPayload() userId=" + userId);
+            if (getCallingUid() != SYSTEM_UID) {
+                throw new SecurityException("Caller must be system");
+            }
             return mBackupRestoreProcessor.getBackupPayload(userId);
         }
 
         @Override
         public void applyRestoredPayload(byte[] payload, int userId) {
             Log.i(TAG, "applyRestoredPayload() userId=" + userId);
+            if (getCallingUid() != SYSTEM_UID) {
+                throw new SecurityException("Caller must be system");
+            }
             mBackupRestoreProcessor.applyRestoredPayload(payload, userId);
         }
 
