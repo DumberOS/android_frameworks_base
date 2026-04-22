@@ -105,6 +105,11 @@
     <dimen name="num_pad_entry_row_margin_bottom">12dp</dimen>
     <dimen name="num_pad_row_margin_bottom">6dp</dimen>
     <dimen name="num_pad_key_margin_end">12dp</dimen>
+    <dimen name="keyguard_sim_num_pad_key_width">58dp</dimen>
+    <dimen name="keyguard_sim_num_pad_key_gap">8dp</dimen>
+    <dimen name="keyguard_sim_num_pad_height">256dp</dimen>
+    <dimen name="keyguard_sim_pin_entry_width">220dp</dimen>
+    <dimen name="keyguard_sim_pin_entry_height">40dp</dimen>
 
     <!-- additional offset for clock switch area items -->
     <dimen name="below_clock_padding_start">32dp</dimen>

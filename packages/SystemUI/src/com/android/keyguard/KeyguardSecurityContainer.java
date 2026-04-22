@@ -686,7 +686,34 @@ public class KeyguardSecurityContainer extends ConstraintLayout {
                 || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
             return true;
         }
+        KeyguardInputView securityView = mSecurityViewFlipper.getSecurityView();
+        if (securityView instanceof KeyguardPinBasedInputView
+                && dispatchPinKeyEvent((KeyguardPinBasedInputView) securityView, event)) {
+            return true;
+        }
         return super.dispatchKeyEvent(event);
+    }
+
+    private boolean dispatchPinKeyEvent(KeyguardPinBasedInputView securityView, KeyEvent event) {
+        if (!isPinKeyEvent(event.getKeyCode())) {
+            return false;
+        }
+        if (event.getAction() == KeyEvent.ACTION_DOWN) {
+            return securityView.onKeyDown(event.getKeyCode(), event);
+        }
+        if (event.getAction() == KeyEvent.ACTION_UP) {
+            return securityView.onKeyUp(event.getKeyCode(), event);
+        }
+        return false;
+    }
+
+    private boolean isPinKeyEvent(int keyCode) {
+        return keyCode == KeyEvent.KEYCODE_BACK
+                || keyCode == KeyEvent.KEYCODE_DEL
+                || KeyEvent.isConfirmKey(keyCode)
+                || (keyCode >= KeyEvent.KEYCODE_0 && keyCode <= KeyEvent.KEYCODE_9)
+                || (keyCode >= KeyEvent.KEYCODE_NUMPAD_0
+                        && keyCode <= KeyEvent.KEYCODE_NUMPAD_9);
     }
 
     @Override

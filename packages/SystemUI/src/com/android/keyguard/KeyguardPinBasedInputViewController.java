@@ -152,6 +152,7 @@ public abstract class KeyguardPinBasedInputViewController<T extends KeyguardPinB
 
         PendingPinInput.addListener(mPendingPinListener);
         maybeAppendPendingPinInput();
+        focusPasswordEntry();
     }
 
     private void setKeyboardBasedFocusOutline(boolean isAnyKeyboardConnected) {
@@ -202,13 +203,22 @@ public abstract class KeyguardPinBasedInputViewController<T extends KeyguardPinB
     @Override
     public void onResume(int reason) {
         super.onResume(reason);
+        focusPasswordEntry();
+        maybeAppendPendingPinInput();
+    }
+
+    private void focusPasswordEntry() {
         // It's possible to reach a state here where mPasswordEntry believes it is focused
         // but it is not actually focused. This state will prevent the view from gaining focus,
         // as requestFocus will no-op since the focus flag is already set. By clearing focus first,
         // it's guaranteed that the view has focus.
         mPasswordEntry.clearFocus();
         mPasswordEntry.requestFocus();
-        maybeAppendPendingPinInput();
+        mPasswordEntry.post(() -> {
+            mPasswordEntry.clearFocus();
+            mPasswordEntry.requestFocus();
+            maybeAppendPendingPinInput();
+        });
     }
 
     @Override

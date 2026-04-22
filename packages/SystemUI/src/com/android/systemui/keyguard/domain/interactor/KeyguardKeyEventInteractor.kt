@@ -166,7 +166,13 @@ constructor(
         if (!isDeviceAwake()) return false
 
         val mode = keyguardSecurityModel.getSecurityMode(selectedUserInteractor.getSelectedUserId())
-        if (mode != KeyguardSecurityModel.SecurityMode.PIN) return false
+        if (
+            mode != KeyguardSecurityModel.SecurityMode.PIN &&
+                mode != KeyguardSecurityModel.SecurityMode.SimPin &&
+                mode != KeyguardSecurityModel.SecurityMode.SimPuk
+        ) {
+            return false
+        }
 
         val code = event.keyCode
         return (code in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9) ||
