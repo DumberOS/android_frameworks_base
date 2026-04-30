@@ -114,6 +114,7 @@ import com.android.server.UiThread;
 import com.android.server.inputmethod.InputMethodManagerInternal;
 import com.android.server.notification.NotificationDelegate;
 import com.android.server.policy.GlobalActionsProvider;
+import com.android.server.policy.WindowManagerPolicy;
 import com.android.server.power.ShutdownCheckPoints;
 import com.android.server.power.ShutdownThread;
 import com.android.server.wm.ActivityTaskManagerInternal;
@@ -910,6 +911,16 @@ public class StatusBarManagerService extends IStatusBarService.Stub implements D
                 mBar.animateExpandNotificationsPanel();
             } catch (RemoteException ex) {
             }
+        }
+    }
+
+    @Override
+    public void showQuickSettingsOverlay() {
+        enforceExpandStatusBar();
+
+        WindowManagerPolicy policy = LocalServices.getService(WindowManagerPolicy.class);
+        if (policy != null) {
+            policy.showQuickSettingsOverlay();
         }
     }
 

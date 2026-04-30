@@ -16,13 +16,18 @@
 package com.android.systemui.statusbar.phone
 
 import android.app.StatusBarManager.WINDOW_STATUS_BAR
+import android.content.Context
 import android.graphics.Point
+import android.os.RemoteException
+import android.os.ServiceManager
 import android.util.Log
 import android.view.InputDevice
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
+import android.view.ViewConfiguration
+import com.android.internal.statusbar.IStatusBarService
 import com.android.systemui.Gefingerpoken
 import com.android.systemui.res.R
 import com.android.systemui.flags.FeatureFlags
@@ -69,6 +74,9 @@ private constructor(
 ) : ViewController<PhoneStatusBarView>(view) {
 
     private lateinit var statusContainer: View
+    private val statusBarService: IStatusBarService? by lazy {
+        IStatusBarService.Stub.asInterface(ServiceManager.getService(Context.STATUS_BAR_SERVICE))
+    }
 
     private val configurationListener =
         object : ConfigurationController.ConfigurationListener {
@@ -178,6 +186,11 @@ private constructor(
     }
 
     inner class PhoneStatusBarViewTouchHandler : Gefingerpoken {
+        private var downX = 0f
+        private var downY = 0f
+        private var showingQuickSettingsOverlay = false
+        private val touchSlop = ViewConfiguration.get(mView.context).scaledTouchSlop
+
         override fun onInterceptTouchEvent(event: MotionEvent): Boolean {
             onTouch(event)
             return false
@@ -199,6 +212,10 @@ private constructor(
                     )
                 }
                 return false
+            }
+
+            if (handleQuickSettingsOverlayGesture(event)) {
+                return true
             }
 
             // If scene framework is enabled, route the touch to it and
@@ -225,6 +242,42 @@ private constructor(
                 }
             }
             return shadeViewController.handleExternalTouch(event)
+        }
+
+        private fun handleQuickSettingsOverlayGesture(event: MotionEvent): Boolean {
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    downX = event.x
+                    downY = event.y
+                    showingQuickSettingsOverlay = false
+                    return true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (!showingQuickSettingsOverlay) {
+                        val deltaX = event.x - downX
+                        val deltaY = event.y - downY
+                        if (deltaY > touchSlop && deltaY > kotlin.math.abs(deltaX)) {
+                            showingQuickSettingsOverlay = true
+                            showQuickSettingsOverlay()
+                        }
+                    }
+                    return true
+                }
+                MotionEvent.ACTION_UP,
+                MotionEvent.ACTION_CANCEL -> {
+                    showingQuickSettingsOverlay = false
+                    return true
+                }
+            }
+            return true
+        }
+
+        private fun showQuickSettingsOverlay() {
+            try {
+                statusBarService?.showQuickSettingsOverlay()
+            } catch (e: RemoteException) {
+                Log.w(TAG, "Unable to show quick settings overlay", e)
+            }
         }
     }
 

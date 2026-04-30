@@ -7217,6 +7217,14 @@ public class NotificationManagerService extends SystemService {
         }
 
         @Override
+        public void cancelNotificationFromSystemListener(String pkg, String tag, int id,
+                int userId) {
+            NotificationManagerService.this.cancelNotification(MY_UID, MY_PID, pkg, tag, id,
+                    0 /* mustHaveFlags */, FLAG_NO_DISMISS, true /* sendDelete */, userId,
+                    REASON_CANCEL, null /* listener */);
+        }
+
+        @Override
         public boolean isNotificationShown(String pkg, String tag, int notificationId, int userId) {
             return isNotificationShownInternal(pkg, tag, notificationId, userId);
         }

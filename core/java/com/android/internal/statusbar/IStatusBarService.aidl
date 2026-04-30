@@ -47,6 +47,7 @@ interface IStatusBarService
 {
     @UnsupportedAppUsage
     void expandNotificationsPanel();
+    void showQuickSettingsOverlay();
     @UnsupportedAppUsage
     void collapsePanels();
     void togglePanel();

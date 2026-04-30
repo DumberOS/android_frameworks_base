@@ -1131,6 +1131,12 @@ public interface WindowManagerPolicy extends WindowManagerPolicyConstants {
     public void showRecentApps();
 
     /**
+     * Show the DumbDroid quick settings overlay.
+     * @hide
+     */
+    default void showQuickSettingsOverlay() {}
+
+    /**
      * Show the global actions dialog.
      * @hide
      */

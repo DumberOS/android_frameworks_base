@@ -23,6 +23,9 @@ import static com.android.systemui.statusbar.StatusBarState.KEYGUARD;
 import static com.android.systemui.util.kotlin.JavaAdapterKt.collectFlow;
 
 import android.app.StatusBarManager;
+import android.content.Context;
+import android.os.RemoteException;
+import android.os.ServiceManager;
 import android.util.Log;
 import android.view.GestureDetector;
 import android.view.InputDevice;
@@ -30,8 +33,10 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewConfiguration;
 
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.internal.statusbar.IStatusBarService;
 import com.android.keyguard.AuthKeyguardMessageArea;
 import com.android.keyguard.LockIconViewController;
 import com.android.systemui.Dumpable;
@@ -112,6 +117,8 @@ public class NotificationShadeWindowViewController implements Dumpable {
     private final PrimaryBouncerInteractor mPrimaryBouncerInteractor;
     private final AlternateBouncerInteractor mAlternateBouncerInteractor;
     private final QuickSettingsController mQuickSettingsController;
+    private final IStatusBarService mStatusBarService;
+    private final int mTouchSlop;
     private final GlanceableHubContainerController
             mGlanceableHubContainerController;
     private GestureDetector mPulsingWakeupGestureHandler;
@@ -223,6 +230,9 @@ public class NotificationShadeWindowViewController implements Dumpable {
         mAlternateBouncerInteractor = alternateBouncerInteractor;
         mQuickSettingsController = quickSettingsController;
         mQQSGestureListener = qqsGestureListener;
+        mStatusBarService = IStatusBarService.Stub.asInterface(
+                ServiceManager.getService(Context.STATUS_BAR_SERVICE));
+        mTouchSlop = ViewConfiguration.get(mView.getContext()).getScaledTouchSlop();
 
         // This view is not part of the newly inflated expanded status bar.
         mBrightnessMirror = mView.findViewById(R.id.brightness_mirror_container);
@@ -301,6 +311,11 @@ public class NotificationShadeWindowViewController implements Dumpable {
         mView.setInteractionEventHandler(new NotificationShadeWindowView.InteractionEventHandler() {
             boolean mUseDragDownHelperForTouch = false;
             boolean mLastInterceptWasDragDownHelper = false;
+            boolean mTrackingQuickSettingsOverlayGesture = false;
+            boolean mQuickSettingsOverlayGestureShown = false;
+            boolean mQuickSettingsOverlayTopGestureCandidate = false;
+            float mQuickSettingsOverlayDownX = 0f;
+            float mQuickSettingsOverlayDownY = 0f;
 
             @Override
             public Boolean handleDispatchTouchEvent(MotionEvent ev) {
@@ -376,6 +391,9 @@ public class NotificationShadeWindowViewController implements Dumpable {
                         && mDreamingWakeupGestureHandler.onTouchEvent(ev)) {
                     return logDownDispatch(ev, "dream wakeup gesture handled", true);
                 }
+                if (handleQuickSettingsOverlayTopDispatch(ev)) {
+                    return logDownDispatch(ev, "quick settings overlay top swipe", true);
+                }
                 if (mStatusBarKeyguardViewManager.dispatchTouchEvent(ev)) {
                     return logDownDispatch(ev, "dispatched to Keyguard", true);
                 }
@@ -449,6 +467,9 @@ public class NotificationShadeWindowViewController implements Dumpable {
 
             private boolean shouldInterceptTouchEventInternal(MotionEvent ev) {
                 mLastInterceptWasDragDownHelper = false;
+                if (handleQuickSettingsOverlayIntercept(ev)) {
+                    return true;
+                }
                 // When the device starts dozing, there's a delay before the device's display state
                 // changes from ON => DOZE to allow for the light reveal animation to run at
                 // a higher refresh rate and to delay visual changes (ie: display blink) when
@@ -546,6 +567,15 @@ public class NotificationShadeWindowViewController implements Dumpable {
 
             @Override
             public boolean handleTouchEvent(MotionEvent ev) {
+                if (mTrackingQuickSettingsOverlayGesture) {
+                    if (ev.getActionMasked() == MotionEvent.ACTION_UP
+                            || ev.getActionMasked() == MotionEvent.ACTION_CANCEL) {
+                        mTrackingQuickSettingsOverlayGesture = false;
+                        mQuickSettingsOverlayGestureShown = false;
+                    }
+                    return true;
+                }
+
                 boolean handled = false;
                 if (mStatusBarStateController.isDozing()) {
                     handled = !mDozeServiceHost.isPulsing();
@@ -571,6 +601,84 @@ public class NotificationShadeWindowViewController implements Dumpable {
                     }
                 }
                 return handled;
+            }
+
+            private boolean handleQuickSettingsOverlayIntercept(MotionEvent ev) {
+                if (mStatusBarStateController.getState() != KEYGUARD
+                        || mStatusBarStateController.isDozing()) {
+                    mTrackingQuickSettingsOverlayGesture = false;
+                    mQuickSettingsOverlayGestureShown = false;
+                    mQuickSettingsOverlayTopGestureCandidate = false;
+                    return false;
+                }
+
+                switch (ev.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        mQuickSettingsOverlayDownX = ev.getX();
+                        mQuickSettingsOverlayDownY = ev.getY();
+                        mTrackingQuickSettingsOverlayGesture = false;
+                        mQuickSettingsOverlayGestureShown = false;
+                        return false;
+                    case MotionEvent.ACTION_MOVE:
+                        float deltaX = ev.getX() - mQuickSettingsOverlayDownX;
+                        float deltaY = ev.getY() - mQuickSettingsOverlayDownY;
+                        if (deltaY > mTouchSlop && deltaY > Math.abs(deltaX)) {
+                            mTrackingQuickSettingsOverlayGesture = true;
+                            if (!mQuickSettingsOverlayGestureShown) {
+                                mQuickSettingsOverlayGestureShown = true;
+                                showQuickSettingsOverlay();
+                            }
+                            return true;
+                        }
+                        return false;
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        boolean wasTracking = mTrackingQuickSettingsOverlayGesture;
+                        mTrackingQuickSettingsOverlayGesture = false;
+                        mQuickSettingsOverlayGestureShown = false;
+                        return wasTracking;
+                }
+                return mTrackingQuickSettingsOverlayGesture;
+            }
+
+            private boolean handleQuickSettingsOverlayTopDispatch(MotionEvent ev) {
+                if (mStatusBarStateController.getState() != KEYGUARD
+                        || mStatusBarStateController.isDozing()) {
+                    mQuickSettingsOverlayTopGestureCandidate = false;
+                    return false;
+                }
+
+                switch (ev.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        if (mStatusBarViewController.touchIsWithinView(ev.getRawX(),
+                                ev.getRawY())) {
+                            mQuickSettingsOverlayDownX = ev.getX();
+                            mQuickSettingsOverlayDownY = ev.getY();
+                            mQuickSettingsOverlayTopGestureCandidate = true;
+                            mQuickSettingsOverlayGestureShown = false;
+                            return true;
+                        }
+                        return false;
+                    case MotionEvent.ACTION_MOVE:
+                        if (!mQuickSettingsOverlayTopGestureCandidate) {
+                            return false;
+                        }
+                        float deltaX = ev.getX() - mQuickSettingsOverlayDownX;
+                        float deltaY = ev.getY() - mQuickSettingsOverlayDownY;
+                        if (!mQuickSettingsOverlayGestureShown
+                                && deltaY > mTouchSlop && deltaY > Math.abs(deltaX)) {
+                            mQuickSettingsOverlayGestureShown = true;
+                            showQuickSettingsOverlay();
+                        }
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        boolean wasCandidate = mQuickSettingsOverlayTopGestureCandidate;
+                        mQuickSettingsOverlayTopGestureCandidate = false;
+                        mQuickSettingsOverlayGestureShown = false;
+                        return wasCandidate;
+                }
+                return mQuickSettingsOverlayTopGestureCandidate;
             }
 
             @Override
@@ -640,6 +748,17 @@ public class NotificationShadeWindowViewController implements Dumpable {
                     }
                 }
         );
+    }
+
+    private void showQuickSettingsOverlay() {
+        if (mStatusBarService == null) {
+            return;
+        }
+        try {
+            mStatusBarService.showQuickSettingsOverlay();
+        } catch (RemoteException e) {
+            Log.w(TAG, "Unable to show quick settings overlay", e);
+        }
     }
 
     private boolean didNotificationPanelInterceptEvent(MotionEvent ev) {

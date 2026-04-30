@@ -41,7 +41,7 @@ interface ISystemUiProxy {
      */
     oneway void onOverviewShown(boolean fromHome) = 6;
 
-    oneway void onOverviewHidden() = 60;
+    oneway void onOverviewHidden() = 61;
 
     /**
      * Proxies motion events from the homescreen UI to the status bar. Only called when

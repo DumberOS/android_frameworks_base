@@ -849,6 +849,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
 
     private boolean mLongSwipeDown;
     private CameraAvailbilityListener mCameraAvailabilityListener;
+    private QuickSettingsOverlay mQuickSettingsOverlay;
+    private boolean mPowerKeyConsumedByQuickSettingsOverlay;
+    private boolean mBackKeyConsumedByQuickSettingsOverlay;
 
     private class PolicyHandler extends Handler {
 
@@ -2318,32 +2321,69 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         performKeyAction(action, event, AssistUtils.INVOCATION_TYPE_UNKNOWN);
     }
 
-    private void closeSettingsPanel() {
-        Intent i = new Intent("eu.dumbdroid.settingspanel.CLOSE_PANEL");
-        mContext.sendBroadcastAsUser(i, UserHandle.CURRENT);
+    private void toggleQuickSettingsOverlay() {
+        mHandler.post(() -> {
+            if (mQuickSettingsOverlay == null) {
+                mQuickSettingsOverlay = new QuickSettingsOverlay(mContext);
+            }
+            mQuickSettingsOverlay.handleMenuPressed();
+        });
     }
 
-    private void launchSettingsPanel() {
-        Intent intent = new Intent(Intent.ACTION_MAIN)
-            .setComponent(new ComponentName(
-                        "eu.dumbdroid.settingspanel",
-                        "eu.dumbdroid.settingspanel.MainActivity"))
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
-                    | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        // Use UserHandle.CURRENT or ALL depending on multi‑user support
-        mContext.startActivityAsUser(intent, UserHandle.CURRENT);
+    @Override
+    public void showQuickSettingsOverlay() {
+        mHandler.post(() -> {
+            if (mQuickSettingsOverlay == null) {
+                mQuickSettingsOverlay = new QuickSettingsOverlay(mContext);
+            }
+            if (!mQuickSettingsOverlay.isShowing()) {
+                mQuickSettingsOverlay.handleMenuPressed();
+            }
+        });
     }
 
-    private boolean isSettingsPanelOn() {
-        ActivityManager am = (ActivityManager) mContext.getSystemService(Context.ACTIVITY_SERVICE);
-        // NOTE: getRunningTasks is deprecated for apps but still available in system code
-        List<ActivityManager.RunningTaskInfo> tasks = am.getRunningTasks(1);
-        if (!tasks.isEmpty()) {
-            ComponentName top = tasks.get(0).topActivity;
-            return "eu.dumbdroid.settingspanel".equals(top.getPackageName())
-                && "eu.dumbdroid.settingspanel.MainActivity".equals(top.getClassName());
+    private boolean dismissQuickSettingsOverlayForPowerKey(KeyEvent event, boolean screenOn) {
+        if (mPowerKeyConsumedByQuickSettingsOverlay) {
+            if (event.getAction() == KeyEvent.ACTION_UP) {
+                mPowerKeyConsumedByQuickSettingsOverlay = false;
+            }
+            return true;
         }
-        return false;
+
+        if (!screenOn || event.getAction() != KeyEvent.ACTION_DOWN || event.getRepeatCount() != 0
+                || mQuickSettingsOverlay == null || !mQuickSettingsOverlay.isShowing()) {
+            return false;
+        }
+
+        mPowerKeyConsumedByQuickSettingsOverlay = true;
+        mHandler.post(() -> {
+            if (mQuickSettingsOverlay != null) {
+                mQuickSettingsOverlay.hide();
+            }
+        });
+        return true;
+    }
+
+    private boolean dismissQuickSettingsOverlayForBackKey(KeyEvent event) {
+        if (mBackKeyConsumedByQuickSettingsOverlay) {
+            if (event.getAction() == KeyEvent.ACTION_UP) {
+                mBackKeyConsumedByQuickSettingsOverlay = false;
+            }
+            return true;
+        }
+
+        if (event.getAction() != KeyEvent.ACTION_DOWN || event.getRepeatCount() != 0
+                || mQuickSettingsOverlay == null || !mQuickSettingsOverlay.isShowing()) {
+            return false;
+        }
+
+        mBackKeyConsumedByQuickSettingsOverlay = true;
+        mHandler.post(() -> {
+            if (mQuickSettingsOverlay != null) {
+                mQuickSettingsOverlay.hide();
+            }
+        });
+        return true;
     }
 
     private void performKeyAction(Action action, KeyEvent event, int assistInvocationType) {
@@ -2351,10 +2391,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             case NOTHING:
                 break;
             case MENU:
-                if (isSettingsPanelOn())
-                    closeSettingsPanel();
-                else
-                    launchSettingsPanel();
+                toggleQuickSettingsOverlay();
                 break;
             case APP_SWITCH:
                 toggleRecentApps();
@@ -4048,14 +4085,14 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                 // Hijack modified menu keys for debugging features
                 final int chordBug = KeyEvent.META_SHIFT_ON;
 
-                if (virtualKey || keyguardOn) {
+                if (virtualKey || (keyguardOn && mMenuPressAction != Action.MENU)) {
                     // Let the app handle the key
                     return false;
                 }
 
                 if (down) {
-                    if (mMenuPressAction == Action.APP_SWITCH
-                            || mMenuLongPressAction == Action.APP_SWITCH) {
+                    if (!keyguardOn && (mMenuPressAction == Action.APP_SWITCH
+                            || mMenuLongPressAction == Action.APP_SWITCH)) {
                         preloadRecentApps();
                     }
                     if (repeatCount == 0) {
@@ -5635,6 +5672,14 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         final boolean isDefaultDisplayOn = Display.isOnState(mDefaultDisplay.getState());
         final boolean isDefaultDisplayAwake = mDefaultDisplayPolicy.isAwake();
         final boolean interactiveAndAwake = interactive && isDefaultDisplayAwake;
+        if (keyCode == KeyEvent.KEYCODE_POWER
+                && dismissQuickSettingsOverlayForPowerKey(event, isDefaultDisplayOn)) {
+            return 0;
+        }
+        if (keyCode == KeyEvent.KEYCODE_BACK && dismissQuickSettingsOverlayForBackKey(event)) {
+            return 0;
+        }
+
         if ((event.getFlags() & KeyEvent.FLAG_FALLBACK) == 0) {
             handleKeyGesture(event, interactiveAndAwake, isDefaultDisplayOn);
         }
