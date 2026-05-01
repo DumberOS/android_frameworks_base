@@ -2342,6 +2342,19 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         });
     }
 
+    private void dismissQuickSettingsOverlay() {
+        final Runnable dismissOverlayRunnable = () -> {
+            if (mQuickSettingsOverlay != null) {
+                mQuickSettingsOverlay.hide();
+            }
+        };
+        if (Looper.myLooper() == mHandler.getLooper()) {
+            dismissOverlayRunnable.run();
+        } else {
+            mHandler.runWithScissors(dismissOverlayRunnable, 0);
+        }
+    }
+
     private boolean dismissQuickSettingsOverlayForPowerKey(KeyEvent event, boolean screenOn) {
         if (mPowerKeyConsumedByQuickSettingsOverlay) {
             if (event.getAction() == KeyEvent.ACTION_UP) {
@@ -2356,11 +2369,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         }
 
         mPowerKeyConsumedByQuickSettingsOverlay = true;
-        mHandler.post(() -> {
-            if (mQuickSettingsOverlay != null) {
-                mQuickSettingsOverlay.hide();
-            }
-        });
+        dismissQuickSettingsOverlay();
         return true;
     }
 
@@ -2378,11 +2387,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         }
 
         mBackKeyConsumedByQuickSettingsOverlay = true;
-        mHandler.post(() -> {
-            if (mQuickSettingsOverlay != null) {
-                mQuickSettingsOverlay.hide();
-            }
-        });
+        dismissQuickSettingsOverlay();
         return true;
     }
 
@@ -5226,6 +5231,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
 
     private void toggleRecentApps() {
         mPreloadedRecentApps = false; // preloading no longer needs to be canceled
+        dismissQuickSettingsOverlay();
         StatusBarManagerInternal statusbar = getStatusBarManagerInternal();
         if (statusbar != null) {
             statusbar.toggleRecentApps();
@@ -5247,6 +5253,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
 
     private void showRecentApps(boolean triggeredFromAltTab) {
         mPreloadedRecentApps = false; // preloading no longer needs to be canceled
+        dismissQuickSettingsOverlay();
         StatusBarManagerInternal statusbar = getStatusBarManagerInternal();
         if (statusbar != null) {
             statusbar.showRecentApps(triggeredFromAltTab);
@@ -6642,6 +6649,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         }
 
         mRequestedOrSleepingDefaultDisplay = true;
+        dismissQuickSettingsOverlay();
 
         if (mKeyguardDelegate != null) {
             mKeyguardDelegate.onStartedGoingToSleep(pmSleepReason);

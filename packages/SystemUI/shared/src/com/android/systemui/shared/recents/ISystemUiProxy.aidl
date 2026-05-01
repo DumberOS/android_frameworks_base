@@ -163,7 +163,7 @@ interface ISystemUiProxy {
     /**
      * Notifies SystemUI of a KeyEvent of the specified type (e.g. KEYCODE_BACK, KEYCODE_HOME).
      */
-    oneway void onKeyEvent(int keycode) = 61;
+    oneway void onKeyEvent(int keycode) = 62;
 
     // Next id = 61
 }
