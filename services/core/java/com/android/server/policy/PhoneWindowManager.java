@@ -2387,7 +2387,13 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         }
 
         mBackKeyConsumedByQuickSettingsOverlay = true;
-        dismissQuickSettingsOverlay();
+        final long backDownTime = event.getDownTime();
+        final Runnable backRunnable = () -> mQuickSettingsOverlay.handleBackPressed(backDownTime);
+        if (Looper.myLooper() == mHandler.getLooper()) {
+            backRunnable.run();
+        } else {
+            mHandler.runWithScissors(backRunnable, 0);
+        }
         return true;
     }
 

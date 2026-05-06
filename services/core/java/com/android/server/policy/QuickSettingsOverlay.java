@@ -24,6 +24,7 @@ import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.RemoteInput;
+import android.bluetooth.BluetoothAdapter;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -37,6 +38,8 @@ import android.hardware.display.DisplayManager;
 import android.hardware.input.InputManager;
 import android.media.AudioManager;
 import android.net.ConnectivityManager;
+import android.net.TetheringManager;
+import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.PowerManager;
 import android.os.RemoteException;
@@ -73,19 +76,23 @@ import java.util.List;
 
 final class QuickSettingsOverlay {
     private static final String TAG = "QuickSettingsOverlay";
+    private static final String SETTING_VISIBLE_QUICK_SETTINGS_BUTTONS =
+            "dumber_quick_settings_visible_buttons";
+    private static final String SETTING_VISIBLE_QUICK_SETTINGS_BUTTONS_VERSION =
+            "dumber_quick_settings_visible_buttons_version";
+    private static final String SETTING_VISIBLE_QUICK_SETTINGS_SLIDERS =
+            "dumber_quick_settings_visible_sliders";
 
     private static final int MODE_NOTIFICATIONS = 0;
     private static final int MODE_QUICK_SETTINGS = 1;
 
     private static final int ROW_FIRST_BUTTONS = 0;
     private static final int ROW_SECOND_BUTTONS = 1;
-    private static final int BUTTON_ROW_COUNT = 2;
-    private static final int ROW_BRIGHTNESS = BUTTON_ROW_COUNT;
-    private static final int FIRST_VOLUME_ROW = ROW_BRIGHTNESS + 1;
+    private static final int BUTTON_ROW_COUNT = 3;
     private static final int VOLUME_COUNT = 4;
-    private static final int LAST_ROW = FIRST_VOLUME_ROW + VOLUME_COUNT - 1;
     private static final int BRIGHTNESS_STEPS = 10;
     private static final int VOLUME_ROW_HEIGHT_DP = 56;
+    private static final int LEGACY_BUTTON_COUNT = 8;
 
     private static final int BUTTON_AIRPLANE = 0;
     private static final int BUTTON_RINGER = 1;
@@ -95,8 +102,20 @@ final class QuickSettingsOverlay {
     private static final int BUTTON_TOUCHSCREEN = 5;
     private static final int BUTTON_MOBILE_DATA = 6;
     private static final int BUTTON_FLASHLIGHT = 7;
+    private static final int BUTTON_WIFI = 8;
+    private static final int BUTTON_BLUETOOTH = 9;
+    private static final int BUTTON_USB_TETHER = 10;
+    private static final int BUTTON_USB_DEBUGGING = 11;
     private static final int BUTTONS_PER_ROW = 4;
     private static final int BUTTON_COUNT = BUTTON_ROW_COUNT * BUTTONS_PER_ROW;
+    private static final int DEFAULT_VISIBLE_BUTTON_MASK = (1 << BUTTON_COUNT) - 1;
+    private static final int SLIDER_BRIGHTNESS = 0;
+    private static final int SLIDER_CALL_VOLUME = 1;
+    private static final int SLIDER_MEDIA_VOLUME = 2;
+    private static final int SLIDER_NOTIFICATION_VOLUME = 3;
+    private static final int SLIDER_ALARM_VOLUME = 4;
+    private static final int SLIDER_COUNT = VOLUME_COUNT + 1;
+    private static final int DEFAULT_VISIBLE_SLIDER_MASK = (1 << SLIDER_COUNT) - 1;
     private static final int NOTIFICATION_DISMISS_ANIMATION_MS = 320;
     private static final int NOTIFICATION_DISMISS_DISTANCE_DP = 120;
     private static final int NOTIFICATION_SWIPE_THRESHOLD_DP = 48;
@@ -110,12 +129,20 @@ final class QuickSettingsOverlay {
             "Touchscreen",
             "Mobile Data",
             "Flashlight",
+            "Wi-Fi",
+            "Bluetooth",
+            "USB Tethering",
+            "USB Debugging",
     };
+    private final Runnable mSyncTouchscreenStateRunnable = this::syncTouchscreenState;
+    private final Runnable mSyncAsyncToggleStatesRunnable = this::syncAsyncToggleStates;
 
     private final Context mContext;
     private final WindowManager mWindowManager;
     private final AudioManager mAudioManager;
     private final ConnectivityManager mConnectivityManager;
+    private final TetheringManager mTetheringManager;
+    private final WifiManager mWifiManager;
     private final DisplayManager mDisplayManager;
     private final NotificationManager mNotificationManager;
     private final INotificationManager mNotificationService;
@@ -126,32 +153,48 @@ final class QuickSettingsOverlay {
     private final InputManager mInputManager;
     private final boolean mAutomaticBrightnessAvailable;
     private final LinearLayout mRoot;
+    private final FrameLayout mHeader;
     private final TextView mCaption;
+    private final FrameLayout mSettingsButton;
     private final ScrollView mScrollView;
     private final LinearLayout mScrollableContent;
     private final LinearLayout mQuickSettingsContainer;
+    private final LinearLayout mQuickSettingsConfigContainer;
     private final LinearLayout mNotificationsContainer;
     private final LinearLayout[] mButtonRows = new LinearLayout[BUTTON_ROW_COUNT];
     private final LinearLayout[] mButtons = new LinearLayout[BUTTON_COUNT];
     private final TextView[] mButtonStates = new TextView[BUTTON_COUNT];
+    private final boolean[] mButtonVisibility = new boolean[BUTTON_COUNT];
+    private final boolean[] mSliderVisibility = new boolean[SLIDER_COUNT];
     private final BrightnessControl mBrightnessControl;
     private final VolumeControl[] mVolumeControls = new VolumeControl[VOLUME_COUNT];
     private final List<NotificationItem> mNotificationItems = new ArrayList<>();
     private final List<ActionMenuItem> mActionMenuItems = new ArrayList<>();
+    private final List<ConfigItem> mConfigItems = new ArrayList<>();
+    private final List<Integer> mVisibleButtonIndices = new ArrayList<>();
     private final List<Integer> mTouchscreenDeviceIds = new ArrayList<>();
 
     private int mMode = MODE_NOTIFICATIONS;
     private int mFocusedRow = ROW_FIRST_BUTTONS;
     private int mFocusedButton;
     private int mFocusedNotification;
+    private int mFocusedConfigItem;
     private float mOverlayTouchDownX;
     private float mOverlayTouchDownY;
     private boolean mNotificationDismissInProgress;
     private boolean mShowingNotificationActionMenu;
     private boolean mShowingRemoteInputEditor;
-    private boolean mWifiHotspotEnabled;
+    private boolean mShowingQuickSettingsConfig;
+    private boolean mQuickSettingsHeaderFocused;
+    private Boolean mPendingTouchscreenEnabled;
+    private Boolean mPendingWifiHotspotEnabled;
+    private Boolean mPendingWifiEnabled;
+    private Boolean mPendingBluetoothEnabled;
+    private Boolean mPendingUsbTetherEnabled;
+    private long mPolicyHandledBackDownTime = -1;
     private boolean mTouchscreenEnabled = true;
     private boolean mFlashlightEnabled;
+    private int mAsyncToggleSyncAttempts;
     private int mFocusedActionMenuItem;
     private NotificationItem mActionMenuSourceItem;
     private NotificationItem mRemoteInputSourceItem;
@@ -167,6 +210,8 @@ final class QuickSettingsOverlay {
         mWindowManager = context.getSystemService(WindowManager.class);
         mAudioManager = context.getSystemService(AudioManager.class);
         mConnectivityManager = context.getSystemService(ConnectivityManager.class);
+        mTetheringManager = context.getSystemService(TetheringManager.class);
+        mWifiManager = context.getSystemService(WifiManager.class);
         mDisplayManager = context.getSystemService(DisplayManager.class);
         mNotificationManager = context.getSystemService(NotificationManager.class);
         mNotificationService = NotificationManager.getService();
@@ -178,6 +223,8 @@ final class QuickSettingsOverlay {
         mInputManager = context.getSystemService(InputManager.class);
         mAutomaticBrightnessAvailable = context.getResources().getBoolean(
                 com.android.internal.R.bool.config_automatic_brightness_available);
+        loadButtonVisibility();
+        loadSliderVisibility();
 
         mRoot = new LinearLayout(context) {
             @Override
@@ -187,6 +234,14 @@ final class QuickSettingsOverlay {
                 }
                 return super.dispatchTouchEvent(event);
             }
+
+            @Override
+            public boolean dispatchKeyEvent(KeyEvent event) {
+                if (handleRootKeyEvent(event)) {
+                    return true;
+                }
+                return super.dispatchKeyEvent(event);
+            }
         };
         mRoot.setOrientation(LinearLayout.VERTICAL);
         mRoot.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -194,49 +249,38 @@ final class QuickSettingsOverlay {
         mRoot.setFocusableInTouchMode(true);
         mRoot.setPadding(dp(16), dp(16), dp(16), dp(16));
         mRoot.setBackground(makeBackground(0xcc101418, 0, dp(18)));
-        mRoot.setOnKeyListener((view, keyCode, event) -> {
-            if (event.getAction() != KeyEvent.ACTION_DOWN || event.getRepeatCount() != 0) {
-                return true;
-            }
-            switch (keyCode) {
-                case KeyEvent.KEYCODE_DPAD_UP:
-                    handleUpDown(false);
-                    return true;
-                case KeyEvent.KEYCODE_DPAD_DOWN:
-                    handleUpDown(true);
-                    return true;
-                case KeyEvent.KEYCODE_DPAD_LEFT:
-                    handleLeftRight(false);
-                    return true;
-                case KeyEvent.KEYCODE_DPAD_RIGHT:
-                    handleLeftRight(true);
-                    return true;
-                case KeyEvent.KEYCODE_DPAD_CENTER:
-                case KeyEvent.KEYCODE_ENTER:
-                    activateFocusedItem();
-                    return true;
-                case KeyEvent.KEYCODE_MENU:
-                    toggleMode();
-                    return true;
-                case KeyEvent.KEYCODE_BACK:
-                    if (mShowingRemoteInputEditor) {
-                        closeRemoteInputEditor(true);
-                    } else if (mShowingNotificationActionMenu) {
-                        closeNotificationActionMenu();
-                    } else {
-                        hide();
-                    }
-                    return true;
-            }
-            return false;
-        });
+        mHeader = new FrameLayout(context);
+        mRoot.addView(mHeader, new LinearLayout.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT, dp(32)));
 
         mCaption = new TextView(context);
         mCaption.setTextColor(Color.WHITE);
         mCaption.setTextSize(18);
         mCaption.setGravity(Gravity.CENTER);
-        mRoot.addView(mCaption, new LinearLayout.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT, dp(32)));
+        mCaption.setPadding(dp(40), 0, dp(40), 0);
+        mHeader.addView(mCaption, new FrameLayout.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
+                Gravity.CENTER));
+
+        mSettingsButton = new FrameLayout(context);
+        mSettingsButton.setClickable(true);
+        mSettingsButton.setFocusable(false);
+        mSettingsButton.setPadding(dp(4), dp(4), dp(4), dp(4));
+        mSettingsButton.setOnClickListener(view -> {
+            if (mMode != MODE_QUICK_SETTINGS || mShowingQuickSettingsConfig) {
+                return;
+            }
+            mQuickSettingsHeaderFocused = true;
+            showQuickSettingsConfig();
+        });
+        ImageView settingsIcon = new ImageView(context);
+        settingsIcon.setImageResource(com.android.internal.R.drawable.ic_settings);
+        settingsIcon.setColorFilter(Color.WHITE);
+        mSettingsButton.addView(settingsIcon, new FrameLayout.LayoutParams(
+                dp(20), dp(20), Gravity.CENTER));
+        FrameLayout.LayoutParams settingsParams = new FrameLayout.LayoutParams(
+                dp(28), dp(28), Gravity.END | Gravity.CENTER_VERTICAL);
+        mHeader.addView(mSettingsButton, settingsParams);
 
         mScrollView = new ScrollView(context) {
             @Override
@@ -260,6 +304,11 @@ final class QuickSettingsOverlay {
         mScrollableContent.addView(mQuickSettingsContainer, new LinearLayout.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT));
 
+        mQuickSettingsConfigContainer = new LinearLayout(context);
+        mQuickSettingsConfigContainer.setOrientation(LinearLayout.VERTICAL);
+        mScrollableContent.addView(mQuickSettingsConfigContainer, new LinearLayout.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT));
+
         mNotificationsContainer = new LinearLayout(context);
         mNotificationsContainer.setOrientation(LinearLayout.VERTICAL);
         mScrollableContent.addView(mNotificationsContainer, new LinearLayout.LayoutParams(
@@ -269,36 +318,80 @@ final class QuickSettingsOverlay {
         mButtonRows[ROW_FIRST_BUTTONS] = firstButtonRow;
         addButton(firstButtonRow, BUTTON_AIRPLANE,
                 com.android.internal.R.drawable.ic_lock_airplane_mode);
+        addQuickSettingsConfigItem(BUTTON_AIRPLANE,
+                com.android.internal.R.drawable.ic_lock_airplane_mode);
         addButton(firstButtonRow, BUTTON_RINGER,
+                com.android.internal.R.drawable.ic_volume);
+        addQuickSettingsConfigItem(BUTTON_RINGER,
                 com.android.internal.R.drawable.ic_volume);
         addButton(firstButtonRow, BUTTON_DND,
                 com.android.internal.R.drawable.ic_qs_dnd);
+        addQuickSettingsConfigItem(BUTTON_DND,
+                com.android.internal.R.drawable.ic_qs_dnd);
         addButton(firstButtonRow, BUTTON_HOTSPOT,
+                com.android.internal.R.drawable.ic_hotspot_transient_animation);
+        addQuickSettingsConfigItem(BUTTON_HOTSPOT,
                 com.android.internal.R.drawable.ic_hotspot_transient_animation);
 
         LinearLayout secondButtonRow = addButtonRow(mQuickSettingsContainer);
         mButtonRows[ROW_SECOND_BUTTONS] = secondButtonRow;
         addButton(secondButtonRow, BUTTON_BATTERY_SAVER,
                 com.android.internal.R.drawable.ic_qs_battery_saver);
+        addQuickSettingsConfigItem(BUTTON_BATTERY_SAVER,
+                com.android.internal.R.drawable.ic_qs_battery_saver);
         addButton(secondButtonRow, BUTTON_TOUCHSCREEN,
-                com.android.internal.R.drawable.ic_accessibility_one_handed);
+                com.android.internal.R.drawable.ic_qs_one_handed_mode);
+        addQuickSettingsConfigItem(BUTTON_TOUCHSCREEN,
+                com.android.internal.R.drawable.ic_qs_one_handed_mode);
         addButton(secondButtonRow, BUTTON_MOBILE_DATA,
+                com.android.internal.R.drawable.ic_menu);
+        addQuickSettingsConfigItem(BUTTON_MOBILE_DATA,
                 com.android.internal.R.drawable.ic_menu);
         addButton(secondButtonRow, BUTTON_FLASHLIGHT,
                 com.android.internal.R.drawable.ic_qs_flashlight);
+        addQuickSettingsConfigItem(BUTTON_FLASHLIGHT,
+                com.android.internal.R.drawable.ic_qs_flashlight);
+        LinearLayout thirdButtonRow = addButtonRow(mQuickSettingsContainer);
+        mButtonRows[2] = thirdButtonRow;
+        addButton(thirdButtonRow, BUTTON_WIFI,
+                com.android.internal.R.drawable.ic_wifi_signal_4);
+        addQuickSettingsConfigItem(BUTTON_WIFI,
+                com.android.internal.R.drawable.ic_wifi_signal_4);
+        addButton(thirdButtonRow, BUTTON_BLUETOOTH,
+                com.android.internal.R.drawable.ic_qs_bluetooth);
+        addQuickSettingsConfigItem(BUTTON_BLUETOOTH,
+                com.android.internal.R.drawable.ic_qs_bluetooth);
+        addButton(thirdButtonRow, BUTTON_USB_TETHER,
+                com.android.internal.R.drawable.ic_usb_48dp);
+        addQuickSettingsConfigItem(BUTTON_USB_TETHER,
+                com.android.internal.R.drawable.ic_usb_48dp);
+        addButton(thirdButtonRow, BUTTON_USB_DEBUGGING,
+                com.android.internal.R.drawable.ic_lock_bugreport);
+        addQuickSettingsConfigItem(BUTTON_USB_DEBUGGING,
+                com.android.internal.R.drawable.ic_lock_bugreport);
 
         mBrightnessControl = addBrightnessControl();
+        addQuickSettingsConfigSliderItem(SLIDER_BRIGHTNESS, "Brightness");
         addVolumeControl(0, "Call Volume", AudioManager.STREAM_VOICE_CALL, 0xff35a7ff);
+        addQuickSettingsConfigSliderItem(SLIDER_CALL_VOLUME, "Call Volume");
         addVolumeControl(1, "Media Volume", AudioManager.STREAM_MUSIC, 0xff30d158);
+        addQuickSettingsConfigSliderItem(SLIDER_MEDIA_VOLUME, "Media Volume");
         addVolumeControl(2, "Notification Volume", AudioManager.STREAM_NOTIFICATION, 0xffffb020);
+        addQuickSettingsConfigSliderItem(SLIDER_NOTIFICATION_VOLUME, "Notification Volume");
         addVolumeControl(3, "Alarm Volume", AudioManager.STREAM_ALARM, 0xffff5f57);
+        addQuickSettingsConfigSliderItem(SLIDER_ALARM_VOLUME, "Alarm Volume");
 
+        applyButtonVisibility();
         updateState();
     }
 
     void handleMenuPressed() {
         if (mShowing) {
-            toggleMode();
+            if (mMode == MODE_QUICK_SETTINGS && mShowingQuickSettingsConfig) {
+                closeQuickSettingsConfig();
+            } else {
+                toggleMode();
+            }
         } else {
             show(MODE_NOTIFICATIONS);
         }
@@ -355,7 +448,93 @@ final class QuickSettingsOverlay {
         }
     }
 
+    boolean handleBackPressed() {
+        if (mMode == MODE_QUICK_SETTINGS && mShowingQuickSettingsConfig) {
+            closeQuickSettingsConfig();
+            return true;
+        }
+        if (mShowingRemoteInputEditor) {
+            closeRemoteInputEditor(true);
+            return true;
+        }
+        if (mShowingNotificationActionMenu) {
+            closeNotificationActionMenu();
+            return true;
+        }
+        hide();
+        return true;
+    }
+
+    boolean handleBackPressed(long downTime) {
+        mPolicyHandledBackDownTime = downTime;
+        return handleBackPressed();
+    }
+
+    private boolean handleRootKeyEvent(KeyEvent event) {
+        switch (event.getKeyCode()) {
+            case KeyEvent.KEYCODE_DPAD_UP:
+                if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+                    handleUpDown(false);
+                }
+                return true;
+            case KeyEvent.KEYCODE_DPAD_DOWN:
+                if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+                    handleUpDown(true);
+                }
+                return true;
+            case KeyEvent.KEYCODE_DPAD_LEFT:
+                if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+                    handleLeftRight(false);
+                }
+                return true;
+            case KeyEvent.KEYCODE_DPAD_RIGHT:
+                if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+                    handleLeftRight(true);
+                }
+                return true;
+            case KeyEvent.KEYCODE_DPAD_CENTER:
+            case KeyEvent.KEYCODE_ENTER:
+                if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+                    activateFocusedItem();
+                }
+                return true;
+            case KeyEvent.KEYCODE_MENU:
+                if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+                    if (mMode == MODE_QUICK_SETTINGS && mShowingQuickSettingsConfig) {
+                        closeQuickSettingsConfig();
+                    } else {
+                        toggleMode();
+                    }
+                }
+                return true;
+            case KeyEvent.KEYCODE_BACK:
+                if (shouldConsumePolicyHandledBack(event)) {
+                    return true;
+                }
+                if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+                    handleBackPressed();
+                }
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private boolean shouldConsumePolicyHandledBack(KeyEvent event) {
+        if (event.getDownTime() != mPolicyHandledBackDownTime) {
+            return false;
+        }
+        if (event.getAction() == KeyEvent.ACTION_UP) {
+            mPolicyHandledBackDownTime = -1;
+        }
+        return true;
+    }
+
     private void toggleMode() {
+        if (mMode == MODE_QUICK_SETTINGS && mShowingQuickSettingsConfig) {
+            closeQuickSettingsConfig();
+            return;
+        }
         resetNotificationOverlayState();
         setMode(mMode == MODE_NOTIFICATIONS ? MODE_QUICK_SETTINGS : MODE_NOTIFICATIONS);
     }
@@ -372,7 +551,11 @@ final class QuickSettingsOverlay {
                 if (deltaY <= -dp(OVERLAY_DISMISS_SWIPE_THRESHOLD_DP)
                         && Math.abs(deltaY) > Math.abs(deltaX)) {
                     if (mMode == MODE_QUICK_SETTINGS) {
-                        setMode(MODE_NOTIFICATIONS);
+                        if (mShowingQuickSettingsConfig) {
+                            closeQuickSettingsConfig();
+                        } else {
+                            setMode(MODE_NOTIFICATIONS);
+                        }
                     } else {
                         hide();
                     }
@@ -394,13 +577,15 @@ final class QuickSettingsOverlay {
     private void setMode(int mode) {
         mMode = mode;
         resetNotificationOverlayState();
+        mShowingQuickSettingsConfig = false;
+        mQuickSettingsHeaderFocused = false;
         if (mMode == MODE_NOTIFICATIONS) {
             refreshNotifications();
         } else {
+            ensureQuickSettingsFocus();
             updateState();
         }
-        mQuickSettingsContainer.setVisibility(mMode == MODE_QUICK_SETTINGS ? View.VISIBLE : View.GONE);
-        mNotificationsContainer.setVisibility(mMode == MODE_NOTIFICATIONS ? View.VISIBLE : View.GONE);
+        updatePageVisibility();
         mScrollView.scrollTo(0, 0);
         updateFocus();
     }
@@ -423,8 +608,7 @@ final class QuickSettingsOverlay {
         button.setPadding(dp(6), dp(8), dp(6), dp(8));
         button.setClickable(true);
         button.setOnClickListener(view -> {
-            mFocusedRow = index / BUTTONS_PER_ROW;
-            mFocusedButton = index % BUTTONS_PER_ROW;
+            focusButton(index);
             activateButton(index);
         });
 
@@ -449,6 +633,93 @@ final class QuickSettingsOverlay {
 
         mButtons[index] = button;
         mButtonStates[index] = state;
+    }
+
+    private void addQuickSettingsConfigItem(int buttonIndex, int iconRes) {
+        LinearLayout row = new LinearLayout(mContext);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(12), dp(10), dp(12), dp(10));
+        row.setMinimumHeight(dp(56));
+        row.setClickable(true);
+
+        ImageView icon = new ImageView(mContext);
+        icon.setImageResource(iconRes);
+        icon.setColorFilter(Color.WHITE);
+        row.addView(icon, new LinearLayout.LayoutParams(dp(24), dp(24)));
+
+        TextView label = new TextView(mContext);
+        label.setText(BUTTON_LABELS[buttonIndex]);
+        label.setTextColor(Color.WHITE);
+        label.setTextSize(15);
+        LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(
+                0, WindowManager.LayoutParams.WRAP_CONTENT, 1f);
+        labelParams.leftMargin = dp(12);
+        row.addView(label, labelParams);
+
+        TextView state = new TextView(mContext);
+        state.setTextColor(0xff8fd0ff);
+        state.setTextSize(12);
+        row.addView(state, new LinearLayout.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT));
+
+        ConfigItem item = new ConfigItem(ConfigItem.TYPE_BUTTON, buttonIndex, row, state);
+        row.setOnClickListener(view -> {
+            int index = mConfigItems.indexOf(item);
+            if (index >= 0) {
+                mFocusedConfigItem = index;
+                toggleConfigItem(item);
+            }
+        });
+        mConfigItems.add(item);
+        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT);
+        rowParams.topMargin = dp(8);
+        mQuickSettingsConfigContainer.addView(row, rowParams);
+    }
+
+    private void addQuickSettingsConfigSliderItem(int sliderIndex, String labelText) {
+        LinearLayout row = new LinearLayout(mContext);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(12), dp(10), dp(12), dp(10));
+        row.setMinimumHeight(dp(56));
+        row.setClickable(true);
+
+        View indicator = new View(mContext);
+        indicator.setBackground(makeBackground(0xff8fd0ff, 0, dp(4)));
+        row.addView(indicator, new LinearLayout.LayoutParams(dp(24), dp(10)));
+
+        TextView label = new TextView(mContext);
+        label.setText(labelText);
+        label.setTextColor(Color.WHITE);
+        label.setTextSize(15);
+        LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(
+                0, WindowManager.LayoutParams.WRAP_CONTENT, 1f);
+        labelParams.leftMargin = dp(12);
+        row.addView(label, labelParams);
+
+        TextView state = new TextView(mContext);
+        state.setTextColor(0xff8fd0ff);
+        state.setTextSize(12);
+        row.addView(state, new LinearLayout.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT));
+
+        ConfigItem item = new ConfigItem(ConfigItem.TYPE_SLIDER, sliderIndex, row, state);
+        row.setOnClickListener(view -> {
+            int index = mConfigItems.indexOf(item);
+            if (index >= 0) {
+                mFocusedConfigItem = index;
+                toggleConfigItem(item);
+            }
+        });
+        mConfigItems.add(item);
+        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT);
+        rowParams.topMargin = dp(8);
+        mQuickSettingsConfigContainer.addView(row, rowParams);
     }
 
     private BrightnessControl addBrightnessControl() {
@@ -576,7 +847,37 @@ final class QuickSettingsOverlay {
             updateFocus();
             return;
         }
-        setFocusedRow(mFocusedRow + (down ? 1 : -1));
+        if (mShowingQuickSettingsConfig) {
+            if (mConfigItems.isEmpty()) {
+                return;
+            }
+            mFocusedConfigItem = MathUtils.constrain(mFocusedConfigItem + (down ? 1 : -1), 0,
+                    mConfigItems.size() - 1);
+            updateFocus();
+            return;
+        }
+        if (mQuickSettingsHeaderFocused) {
+            if (down) {
+                focusFirstQuickSettingsControl();
+            }
+            return;
+        }
+        if (!down && mFocusedRow == getFirstQuickSettingsFocusableRow()) {
+            mQuickSettingsHeaderFocused = true;
+            updateFocus();
+            return;
+        }
+        int focusedCenterX = getQuickSettingsFocusedCenterX();
+        int targetRow = findFocusableQuickSettingsRow(mFocusedRow + (down ? 1 : -1), down);
+        if (targetRow == mFocusedRow) {
+            return;
+        }
+        mQuickSettingsHeaderFocused = false;
+        mFocusedRow = targetRow;
+        if (isButtonRowFocused()) {
+            mFocusedButton = findNearestButtonColumnForRow(mFocusedRow, focusedCenterX);
+        }
+        updateFocus();
     }
 
     private void handleLeftRight(boolean right) {
@@ -591,6 +892,9 @@ final class QuickSettingsOverlay {
     }
 
     private void handleQuickSettingsLeftRight(boolean right) {
+        if (mShowingQuickSettingsConfig || mQuickSettingsHeaderFocused) {
+            return;
+        }
         if (isBrightnessRowFocused()) {
             changeBrightness(right);
             return;
@@ -600,9 +904,11 @@ final class QuickSettingsOverlay {
             return;
         }
 
-        mFocusedButton = MathUtils.constrain(mFocusedButton + (right ? 1 : -1),
-                0, BUTTONS_PER_ROW - 1);
-        updateFocus();
+        int nextButton = findNextVisibleButtonInRow(mFocusedRow, mFocusedButton, right);
+        if (nextButton >= 0) {
+            mFocusedButton = nextButton;
+            updateFocus();
+        }
     }
 
     private void activateFocusedItem() {
@@ -616,6 +922,12 @@ final class QuickSettingsOverlay {
                 return;
             }
             activateFocusedNotification();
+        } else if (mShowingQuickSettingsConfig) {
+            if (!mConfigItems.isEmpty()) {
+                toggleConfigItem(mConfigItems.get(mFocusedConfigItem));
+            }
+        } else if (mQuickSettingsHeaderFocused) {
+            showQuickSettingsConfig();
         } else if (isBrightnessRowFocused()) {
             toggleAutoBrightness();
         } else {
@@ -1345,7 +1657,12 @@ final class QuickSettingsOverlay {
     }
 
     private void setFocusedRow(int row) {
-        mFocusedRow = MathUtils.constrain(row, ROW_FIRST_BUTTONS, LAST_ROW);
+        mQuickSettingsHeaderFocused = false;
+        int previousRow = mFocusedRow;
+        mFocusedRow = findFocusableQuickSettingsRow(row, row >= previousRow);
+        if (isButtonRowFocused()) {
+            mFocusedButton = findNearestVisibleButtonInRow(mFocusedRow, mFocusedButton);
+        }
         updateFocus();
     }
 
@@ -1382,6 +1699,18 @@ final class QuickSettingsOverlay {
                     break;
                 case BUTTON_FLASHLIGHT:
                     toggleFlashlight();
+                    break;
+                case BUTTON_WIFI:
+                    toggleWifi();
+                    break;
+                case BUTTON_BLUETOOTH:
+                    toggleBluetooth();
+                    break;
+                case BUTTON_USB_TETHER:
+                    toggleUsbTethering();
+                    break;
+                case BUTTON_USB_DEBUGGING:
+                    toggleUsbDebugging();
                     break;
             }
         } catch (Exception e) {
@@ -1433,25 +1762,28 @@ final class QuickSettingsOverlay {
             return;
         }
 
-        if (isWifiHotspotOn()) {
-            mWifiHotspotEnabled = false;
+        boolean enabled = getDisplayedWifiHotspotState();
+        mPendingWifiHotspotEnabled = !enabled;
+        if (enabled) {
             mConnectivityManager.stopTethering(ConnectivityManager.TETHERING_WIFI);
+            scheduleAsyncToggleStateSync();
         } else {
             mConnectivityManager.startTethering(ConnectivityManager.TETHERING_WIFI,
                     false, new ConnectivityManager.OnStartTetheringCallback() {
                         @Override
                         public void onTetheringStarted() {
-                            mWifiHotspotEnabled = true;
+                            mPendingWifiHotspotEnabled = null;
                             mRoot.post(QuickSettingsOverlay.this::updateState);
                         }
 
                         @Override
                         public void onTetheringFailed() {
-                            mWifiHotspotEnabled = false;
+                            mPendingWifiHotspotEnabled = null;
                             mRoot.post(QuickSettingsOverlay.this::updateState);
                             Slog.w(TAG, "Unable to start Wi-Fi hotspot");
                         }
                     });
+            scheduleAsyncToggleStateSync();
         }
     }
 
@@ -1464,7 +1796,12 @@ final class QuickSettingsOverlay {
 
     private void toggleTouchscreen() {
         refreshTouchscreenState();
-        setTouchscreenEnabled(!mTouchscreenEnabled);
+        boolean enabled = !mTouchscreenEnabled;
+        mPendingTouchscreenEnabled = enabled;
+        mTouchscreenEnabled = enabled;
+        setTouchscreenEnabled(enabled);
+        mRoot.removeCallbacks(mSyncTouchscreenStateRunnable);
+        mRoot.postDelayed(mSyncTouchscreenStateRunnable, 150);
     }
 
     private void toggleMobileData() {
@@ -1472,6 +1809,69 @@ final class QuickSettingsOverlay {
             return;
         }
         mTelephonyManager.setDataEnabled(!mTelephonyManager.isDataEnabled());
+    }
+
+    private void toggleWifi() {
+        if (mWifiManager == null) {
+            return;
+        }
+        boolean enabled = getDisplayedWifiState();
+        mPendingWifiEnabled = !enabled;
+        mWifiManager.setWifiEnabled(!enabled);
+        scheduleAsyncToggleStateSync();
+    }
+
+    private void toggleBluetooth() {
+        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+        if (adapter == null) {
+            return;
+        }
+        boolean enabled = getDisplayedBluetoothState();
+        mPendingBluetoothEnabled = !enabled;
+        if (enabled) {
+            adapter.disable();
+        } else {
+            adapter.enable();
+        }
+        scheduleAsyncToggleStateSync();
+    }
+
+    private void toggleUsbTethering() {
+        if (mConnectivityManager == null) {
+            return;
+        }
+        boolean enabled = getDisplayedUsbTetheringState();
+        mPendingUsbTetherEnabled = !enabled;
+        if (enabled) {
+            mConnectivityManager.stopTethering(ConnectivityManager.TETHERING_USB);
+            scheduleAsyncToggleStateSync();
+            return;
+        }
+        mConnectivityManager.startTethering(ConnectivityManager.TETHERING_USB,
+                false, new ConnectivityManager.OnStartTetheringCallback() {
+                    @Override
+                    public void onTetheringStarted() {
+                        mRoot.post(QuickSettingsOverlay.this::scheduleAsyncToggleStateSync);
+                    }
+
+                    @Override
+                    public void onTetheringFailed() {
+                        mPendingUsbTetherEnabled = null;
+                        mRoot.post(QuickSettingsOverlay.this::updateState);
+                        Slog.w(TAG, "Unable to start USB tethering");
+                    }
+                });
+        scheduleAsyncToggleStateSync();
+    }
+
+    private void toggleUsbDebugging() {
+        boolean enabled = isUsbDebuggingOn();
+        if (!enabled) {
+            Settings.Global.putInt(mContext.getContentResolver(),
+                    Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 1);
+        }
+        Settings.Global.putInt(mContext.getContentResolver(),
+                Settings.Global.ADB_ENABLED, enabled ? 0 : 1);
     }
 
     private void toggleFlashlight() throws CameraAccessException {
@@ -1516,7 +1916,10 @@ final class QuickSettingsOverlay {
             int max = mAudioManager.getStreamMaxVolume(control.stream);
             float fraction = MathUtils.constrain(x / width, 0f, 1f);
             int volume = MathUtils.constrain(Math.round(min + fraction * (max - min)), min, max);
-            mFocusedRow = FIRST_VOLUME_ROW + index;
+            int volumeRow = getRowForVolumeControl(index);
+            if (volumeRow >= 0) {
+                mFocusedRow = volumeRow;
+            }
             mAudioManager.setStreamVolume(control.stream, volume, 0);
             updateState();
         } catch (RuntimeException e) {
@@ -1539,7 +1942,7 @@ final class QuickSettingsOverlay {
             return;
         }
         float fraction = MathUtils.constrain(x / width, 0f, 1f);
-        mFocusedRow = ROW_BRIGHTNESS;
+        mFocusedRow = getBrightnessRowIndex();
         setBrightnessFraction(fraction);
     }
 
@@ -1567,25 +1970,88 @@ final class QuickSettingsOverlay {
 
     private void updateState() {
         try {
-            refreshTouchscreenState();
+            if (mPendingTouchscreenEnabled == null) {
+                refreshTouchscreenState();
+            } else {
+                mTouchscreenEnabled = mPendingTouchscreenEnabled;
+            }
             mButtonStates[BUTTON_AIRPLANE].setText(isAirplaneModeOn() ? "ON" : "OFF");
             mButtonStates[BUTTON_RINGER].setText(getRingerLabel());
             mButtonStates[BUTTON_DND].setText(isDoNotDisturbOn() ? "ON" : "OFF");
-            mButtonStates[BUTTON_HOTSPOT].setText(isWifiHotspotOn() ? "ON" : "OFF");
+            mButtonStates[BUTTON_HOTSPOT].setText(
+                    getDisplayedWifiHotspotState() ? "ON" : "OFF");
             mButtonStates[BUTTON_BATTERY_SAVER].setText(isBatterySaverOn() ? "ON" : "OFF");
             mButtonStates[BUTTON_TOUCHSCREEN].setText(mTouchscreenEnabled ? "ON" : "OFF");
             mButtonStates[BUTTON_MOBILE_DATA].setText(isMobileDataOn() ? "ON" : "OFF");
             mButtonStates[BUTTON_FLASHLIGHT].setText(mFlashlightEnabled ? "ON" : "OFF");
+            mButtonStates[BUTTON_WIFI].setText(getDisplayedWifiState() ? "ON" : "OFF");
+            mButtonStates[BUTTON_BLUETOOTH].setText(
+                    getDisplayedBluetoothState() ? "ON" : "OFF");
+            mButtonStates[BUTTON_USB_TETHER].setText(
+                    getDisplayedUsbTetheringState() ? "ON" : "OFF");
+            mButtonStates[BUTTON_USB_DEBUGGING].setText(isUsbDebuggingOn() ? "ON" : "OFF");
             updateBrightness();
             updateVolumes();
+            applyButtonVisibility();
         } catch (RuntimeException e) {
             Slog.w(TAG, "Unable to refresh quick settings overlay", e);
         }
         updateFocus();
     }
 
+    private void syncTouchscreenState() {
+        mPendingTouchscreenEnabled = null;
+        updateState();
+    }
+
+    private void syncAsyncToggleStates() {
+        boolean needsAnotherSync = false;
+
+        if (mPendingWifiHotspotEnabled != null) {
+            if (mPendingWifiHotspotEnabled == isWifiHotspotOn()) {
+                mPendingWifiHotspotEnabled = null;
+            } else {
+                needsAnotherSync = true;
+            }
+        }
+        if (mPendingWifiEnabled != null) {
+            if (mPendingWifiEnabled == isWifiOn()) {
+                mPendingWifiEnabled = null;
+            } else {
+                needsAnotherSync = true;
+            }
+        }
+        if (mPendingBluetoothEnabled != null) {
+            if (mPendingBluetoothEnabled == isBluetoothOn()) {
+                mPendingBluetoothEnabled = null;
+            } else {
+                needsAnotherSync = true;
+            }
+        }
+        if (mPendingUsbTetherEnabled != null) {
+            if (mPendingUsbTetherEnabled == isUsbTetheringOn()) {
+                mPendingUsbTetherEnabled = null;
+            } else {
+                needsAnotherSync = true;
+            }
+        }
+
+        if (needsAnotherSync && mAsyncToggleSyncAttempts < 5) {
+            mAsyncToggleSyncAttempts++;
+            mRoot.postDelayed(mSyncAsyncToggleStatesRunnable, 500);
+        } else {
+            mAsyncToggleSyncAttempts = 0;
+            mPendingWifiHotspotEnabled = null;
+            mPendingWifiEnabled = null;
+            mPendingBluetoothEnabled = null;
+            mPendingUsbTetherEnabled = null;
+        }
+        updateState();
+    }
+
     private void updateFocus() {
         if (mMode == MODE_NOTIFICATIONS) {
+            mSettingsButton.setVisibility(View.GONE);
             if (mShowingRemoteInputEditor) {
                 if (mRemoteInputEditor != null) {
                     mRemoteInputEditor.setBackground(makeBackground(0xff2d6cdf,
@@ -1619,22 +2085,42 @@ final class QuickSettingsOverlay {
             return;
         }
 
+        mSettingsButton.setVisibility(mShowingQuickSettingsConfig ? View.GONE : View.VISIBLE);
+        if (mShowingQuickSettingsConfig) {
+            for (int i = 0; i < mConfigItems.size(); i++) {
+                ConfigItem item = mConfigItems.get(i);
+                boolean focused = i == mFocusedConfigItem;
+                item.row.setBackground(makeBackground(focused ? 0xff2d6cdf : 0xff263038,
+                        focused ? 0xffffffff : 0xff4c5963, dp(12)));
+            }
+            mCaption.setText("Quick Settings Buttons");
+            scrollFocusedItemIntoView();
+            return;
+        }
+
+        mSettingsButton.setBackground(makeBackground(
+                mQuickSettingsHeaderFocused ? 0xff2d6cdf : 0xff263038,
+                mQuickSettingsHeaderFocused ? 0xffffffff : 0xff4c5963, dp(12)));
         for (int i = 0; i < mButtons.length; i++) {
-            boolean focused = isButtonRowFocused() && i == getFocusedButtonIndex();
+            boolean focused = !mQuickSettingsHeaderFocused && isButtonRowFocused()
+                    && i == getFocusedButtonIndex();
             mButtons[i].setBackground(makeBackground(focused ? 0xff2d6cdf : 0xff263038,
                     focused ? 0xffffffff : 0xff4c5963, dp(12)));
         }
-        boolean brightnessFocused = isBrightnessRowFocused();
+        boolean brightnessFocused = !mQuickSettingsHeaderFocused && isBrightnessRowFocused();
         mBrightnessControl.row.setBackground(makeBackground(
                 brightnessFocused ? 0xff2d6cdf : 0xff263038,
                 brightnessFocused ? 0xffffffff : 0xff4c5963, dp(12)));
         for (int i = 0; i < mVolumeControls.length; i++) {
             VolumeControl control = mVolumeControls[i];
-            boolean focused = mFocusedRow == FIRST_VOLUME_ROW + i;
+            boolean focused = !mQuickSettingsHeaderFocused
+                    && getVolumeControlIndexForRow(mFocusedRow) == i;
             control.row.setBackground(makeBackground(focused ? 0xff2d6cdf : 0xff263038,
                     focused ? 0xffffffff : 0xff4c5963, dp(12)));
         }
-        if (isBrightnessRowFocused()) {
+        if (mQuickSettingsHeaderFocused) {
+            mCaption.setText("Configure Quick Settings");
+        } else if (isBrightnessRowFocused()) {
             mCaption.setText(getBrightnessCaption());
         } else if (isVolumeRowFocused()) {
             mCaption.setText(getFocusedVolumeCaption());
@@ -1711,7 +2197,13 @@ final class QuickSettingsOverlay {
     }
 
     private boolean isWifiHotspotOn() {
-        return mWifiHotspotEnabled;
+        return isTetheringActive(mTetheringManager != null
+                ? mTetheringManager.getTetherableWifiRegexs() : null);
+    }
+
+    private boolean getDisplayedWifiHotspotState() {
+        return mPendingWifiHotspotEnabled != null
+                ? mPendingWifiHotspotEnabled : isWifiHotspotOn();
     }
 
     private boolean isBatterySaverOn() {
@@ -1720,6 +2212,60 @@ final class QuickSettingsOverlay {
 
     private boolean isMobileDataOn() {
         return mTelephonyManager != null && mTelephonyManager.isDataEnabled();
+    }
+
+    private boolean isWifiOn() {
+        return mWifiManager != null && mWifiManager.isWifiEnabled();
+    }
+
+    private boolean getDisplayedWifiState() {
+        return mPendingWifiEnabled != null ? mPendingWifiEnabled : isWifiOn();
+    }
+
+    private boolean isBluetoothOn() {
+        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+        return adapter != null && adapter.isEnabled();
+    }
+
+    private boolean getDisplayedBluetoothState() {
+        return mPendingBluetoothEnabled != null
+                ? mPendingBluetoothEnabled : isBluetoothOn();
+    }
+
+    private boolean isUsbTetheringOn() {
+        return isTetheringActive(mTetheringManager != null
+                ? mTetheringManager.getTetherableUsbRegexs() : null);
+    }
+
+    private boolean getDisplayedUsbTetheringState() {
+        return mPendingUsbTetherEnabled != null
+                ? mPendingUsbTetherEnabled : isUsbTetheringOn();
+    }
+
+    private boolean isUsbDebuggingOn() {
+        return Settings.Global.getInt(mContext.getContentResolver(),
+                Settings.Global.ADB_ENABLED, 0) != 0;
+    }
+
+    private boolean isTetheringActive(String[] tetherableRegexs) {
+        if (mTetheringManager == null || tetherableRegexs == null
+                || tetherableRegexs.length == 0) {
+            return false;
+        }
+        for (String iface : mTetheringManager.getTetheredIfaces()) {
+            for (String regex : tetherableRegexs) {
+                if (iface.matches(regex)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private void scheduleAsyncToggleStateSync() {
+        mAsyncToggleSyncAttempts = 0;
+        mRoot.removeCallbacks(mSyncAsyncToggleStatesRunnable);
+        mRoot.postDelayed(mSyncAsyncToggleStatesRunnable, 500);
     }
 
     private String getRearFlashCameraId() throws CameraAccessException {
@@ -1798,23 +2344,399 @@ final class QuickSettingsOverlay {
     }
 
     private boolean isButtonRowFocused() {
-        return mFocusedRow < BUTTON_ROW_COUNT;
+        return mFocusedRow < getVisibleButtonRowCount();
     }
 
     private boolean isBrightnessRowFocused() {
-        return mFocusedRow == ROW_BRIGHTNESS;
+        return getBrightnessRowIndex() >= 0 && mFocusedRow == getBrightnessRowIndex();
     }
 
     private boolean isVolumeRowFocused() {
-        return mFocusedRow >= FIRST_VOLUME_ROW;
+        return getVolumeControlIndexForRow(mFocusedRow) >= 0;
     }
 
     private VolumeControl getFocusedVolumeControl() {
-        return mVolumeControls[mFocusedRow - FIRST_VOLUME_ROW];
+        int volumeIndex = getVolumeControlIndexForRow(mFocusedRow);
+        return mVolumeControls[Math.max(0, volumeIndex)];
     }
 
     private int getFocusedButtonIndex() {
-        return mFocusedRow * BUTTONS_PER_ROW + mFocusedButton;
+        return getButtonIndexAtPosition(mFocusedRow, mFocusedButton);
+    }
+
+    private void showQuickSettingsConfig() {
+        mShowingQuickSettingsConfig = true;
+        mQuickSettingsHeaderFocused = false;
+        mFocusedConfigItem = MathUtils.constrain(mFocusedConfigItem, 0,
+                Math.max(0, mConfigItems.size() - 1));
+        updatePageVisibility();
+        mScrollView.scrollTo(0, 0);
+        mRoot.requestFocus();
+        updateFocus();
+    }
+
+    private void closeQuickSettingsConfig() {
+        mShowingQuickSettingsConfig = false;
+        mQuickSettingsHeaderFocused = true;
+        ensureQuickSettingsFocus();
+        updatePageVisibility();
+        mRoot.requestFocus();
+        updateFocus();
+    }
+
+    private void updatePageVisibility() {
+        mQuickSettingsContainer.setVisibility(
+                mMode == MODE_QUICK_SETTINGS && !mShowingQuickSettingsConfig
+                        ? View.VISIBLE : View.GONE);
+        mQuickSettingsConfigContainer.setVisibility(
+                mMode == MODE_QUICK_SETTINGS && mShowingQuickSettingsConfig
+                        ? View.VISIBLE : View.GONE);
+        mNotificationsContainer.setVisibility(
+                mMode == MODE_NOTIFICATIONS ? View.VISIBLE : View.GONE);
+    }
+
+    private void loadButtonVisibility() {
+        int visibleMask = Settings.Secure.getIntForUser(mContext.getContentResolver(),
+                SETTING_VISIBLE_QUICK_SETTINGS_BUTTONS, Integer.MIN_VALUE,
+                UserHandle.USER_CURRENT_OR_SELF);
+        if (visibleMask == Integer.MIN_VALUE) {
+            visibleMask = DEFAULT_VISIBLE_BUTTON_MASK;
+        } else {
+            int storedCount = Settings.Secure.getIntForUser(mContext.getContentResolver(),
+                    SETTING_VISIBLE_QUICK_SETTINGS_BUTTONS_VERSION, LEGACY_BUTTON_COUNT,
+                    UserHandle.USER_CURRENT_OR_SELF);
+            for (int i = storedCount; i < BUTTON_COUNT; i++) {
+                visibleMask |= 1 << i;
+            }
+        }
+        for (int i = 0; i < BUTTON_COUNT; i++) {
+            mButtonVisibility[i] = (visibleMask & (1 << i)) != 0;
+        }
+    }
+
+    private void loadSliderVisibility() {
+        int visibleMask = Settings.Secure.getIntForUser(mContext.getContentResolver(),
+                SETTING_VISIBLE_QUICK_SETTINGS_SLIDERS, DEFAULT_VISIBLE_SLIDER_MASK,
+                UserHandle.USER_CURRENT_OR_SELF);
+        for (int i = 0; i < SLIDER_COUNT; i++) {
+            mSliderVisibility[i] = (visibleMask & (1 << i)) != 0;
+        }
+    }
+
+    private void saveButtonVisibility() {
+        int visibleMask = 0;
+        for (int i = 0; i < BUTTON_COUNT; i++) {
+            if (mButtonVisibility[i]) {
+                visibleMask |= 1 << i;
+            }
+        }
+        Settings.Secure.putIntForUser(mContext.getContentResolver(),
+                SETTING_VISIBLE_QUICK_SETTINGS_BUTTONS, visibleMask,
+                UserHandle.USER_CURRENT_OR_SELF);
+        Settings.Secure.putIntForUser(mContext.getContentResolver(),
+                SETTING_VISIBLE_QUICK_SETTINGS_BUTTONS_VERSION, BUTTON_COUNT,
+                UserHandle.USER_CURRENT_OR_SELF);
+    }
+
+    private void saveSliderVisibility() {
+        int visibleMask = 0;
+        for (int i = 0; i < SLIDER_COUNT; i++) {
+            if (mSliderVisibility[i]) {
+                visibleMask |= 1 << i;
+            }
+        }
+        Settings.Secure.putIntForUser(mContext.getContentResolver(),
+                SETTING_VISIBLE_QUICK_SETTINGS_SLIDERS, visibleMask,
+                UserHandle.USER_CURRENT_OR_SELF);
+    }
+
+    private void toggleConfigItem(ConfigItem item) {
+        if (item.type == ConfigItem.TYPE_BUTTON) {
+            toggleQuickSettingsButtonVisibility(item.index);
+        } else {
+            toggleQuickSettingsSliderVisibility(item.index);
+        }
+    }
+
+    private void toggleQuickSettingsButtonVisibility(int buttonIndex) {
+        mButtonVisibility[buttonIndex] = !mButtonVisibility[buttonIndex];
+        saveButtonVisibility();
+        applyButtonVisibility();
+        ensureQuickSettingsFocus();
+        updateFocus();
+    }
+
+    private void toggleQuickSettingsSliderVisibility(int sliderIndex) {
+        mSliderVisibility[sliderIndex] = !mSliderVisibility[sliderIndex];
+        saveSliderVisibility();
+        applyButtonVisibility();
+        ensureQuickSettingsFocus();
+        updateFocus();
+    }
+
+    private void applyButtonVisibility() {
+        mVisibleButtonIndices.clear();
+        for (LinearLayout row : mButtonRows) {
+            row.removeAllViews();
+        }
+        for (int i = 0; i < BUTTON_COUNT; i++) {
+            if (!mButtonVisibility[i]) {
+                mButtons[i].setVisibility(View.GONE);
+                continue;
+            }
+            mButtons[i].setVisibility(View.VISIBLE);
+            mVisibleButtonIndices.add(i);
+            int position = mVisibleButtonIndices.size() - 1;
+            int row = position / BUTTONS_PER_ROW;
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                    dp(62), dp(62));
+            if (position % BUTTONS_PER_ROW > 0) {
+                params.leftMargin = dp(8);
+            }
+            mButtonRows[row].addView(mButtons[i], params);
+        }
+        for (int row = ROW_FIRST_BUTTONS; row < mButtonRows.length; row++) {
+            mButtonRows[row].setVisibility(rowHasVisibleButtons(row) ? View.VISIBLE : View.GONE);
+        }
+        for (ConfigItem item : mConfigItems) {
+            item.state.setText(isConfigItemVisible(item) ? "Shown" : "Hidden");
+        }
+        mBrightnessControl.row.setVisibility(mSliderVisibility[SLIDER_BRIGHTNESS]
+                ? View.VISIBLE : View.GONE);
+        for (int i = 0; i < mVolumeControls.length; i++) {
+            mVolumeControls[i].row.setVisibility(mSliderVisibility[SLIDER_CALL_VOLUME + i]
+                    ? View.VISIBLE : View.GONE);
+        }
+    }
+
+    private boolean isConfigItemVisible(ConfigItem item) {
+        return item.type == ConfigItem.TYPE_BUTTON
+                ? mButtonVisibility[item.index]
+                : mSliderVisibility[item.index];
+    }
+
+    private void ensureQuickSettingsFocus() {
+        if (mMode != MODE_QUICK_SETTINGS || mShowingQuickSettingsConfig || mQuickSettingsHeaderFocused) {
+            return;
+        }
+        if (getQuickSettingsContentRowCount() == 0) {
+            mQuickSettingsHeaderFocused = true;
+            return;
+        }
+        if (isButtonRowFocused() && rowHasVisibleButtons(mFocusedRow)) {
+            mFocusedButton = findNearestVisibleButtonInRow(mFocusedRow, mFocusedButton);
+            return;
+        }
+        mFocusedRow = findFocusableQuickSettingsRow(mFocusedRow, true);
+        if (isButtonRowFocused()) {
+            mFocusedButton = findNearestVisibleButtonInRow(mFocusedRow, mFocusedButton);
+        }
+    }
+
+    private void focusFirstQuickSettingsControl() {
+        if (getQuickSettingsContentRowCount() == 0) {
+            mQuickSettingsHeaderFocused = true;
+            updateFocus();
+            return;
+        }
+        mQuickSettingsHeaderFocused = false;
+        mFocusedRow = getFirstQuickSettingsFocusableRow();
+        if (isButtonRowFocused()) {
+            mFocusedButton = findNearestVisibleButtonInRow(mFocusedRow, 0);
+        }
+        updateFocus();
+    }
+
+    private int getFirstQuickSettingsFocusableRow() {
+        return findFocusableQuickSettingsRow(ROW_FIRST_BUTTONS, true);
+    }
+
+    private int findFocusableQuickSettingsRow(int requestedRow, boolean preferDown) {
+        if (getQuickSettingsContentRowCount() == 0) {
+            return ROW_FIRST_BUTTONS;
+        }
+        int clampedRow = MathUtils.constrain(requestedRow, ROW_FIRST_BUTTONS, getLastRowIndex());
+        if (isQuickSettingsRowFocusable(clampedRow)) {
+            return clampedRow;
+        }
+        if (preferDown) {
+            for (int row = clampedRow + 1; row <= getLastRowIndex(); row++) {
+                if (isQuickSettingsRowFocusable(row)) {
+                    return row;
+                }
+            }
+            for (int row = clampedRow - 1; row >= ROW_FIRST_BUTTONS; row--) {
+                if (isQuickSettingsRowFocusable(row)) {
+                    return row;
+                }
+            }
+        } else {
+            for (int row = clampedRow - 1; row >= ROW_FIRST_BUTTONS; row--) {
+                if (isQuickSettingsRowFocusable(row)) {
+                    return row;
+                }
+            }
+            for (int row = clampedRow + 1; row <= getLastRowIndex(); row++) {
+                if (isQuickSettingsRowFocusable(row)) {
+                    return row;
+                }
+            }
+        }
+        return getBrightnessRowIndex();
+    }
+
+    private boolean isQuickSettingsRowFocusable(int row) {
+        if (row < ROW_FIRST_BUTTONS || row >= getQuickSettingsContentRowCount()) {
+            return false;
+        }
+        if (row < getVisibleButtonRowCount()) {
+            return rowHasVisibleButtons(row);
+        }
+        return row == getBrightnessRowIndex() || getVolumeControlIndexForRow(row) >= 0;
+    }
+
+    private boolean rowHasVisibleButtons(int row) {
+        return getButtonCountForRow(row) > 0;
+    }
+
+    private int findNearestVisibleButtonInRow(int row, int preferredColumn) {
+        int count = getButtonCountForRow(row);
+        if (count <= 0) {
+            return 0;
+        }
+        return MathUtils.constrain(preferredColumn, 0, count - 1);
+    }
+
+    private int findNextVisibleButtonInRow(int row, int currentColumn, boolean right) {
+        int count = getButtonCountForRow(row);
+        int next = currentColumn + (right ? 1 : -1);
+        if (next >= 0 && next < count) {
+            return next;
+        }
+        return -1;
+    }
+
+    private int findNearestButtonColumnForRow(int row, int targetCenterX) {
+        int count = getButtonCountForRow(row);
+        if (count <= 0) {
+            return 0;
+        }
+        if (targetCenterX < 0) {
+            return findNearestVisibleButtonInRow(row, mFocusedButton);
+        }
+        int nearestColumn = 0;
+        int smallestDistance = Integer.MAX_VALUE;
+        for (int column = 0; column < count; column++) {
+            int centerX = getButtonCenterX(row, column);
+            int distance = Math.abs(centerX - targetCenterX);
+            if (distance < smallestDistance) {
+                smallestDistance = distance;
+                nearestColumn = column;
+            }
+        }
+        return nearestColumn;
+    }
+
+    private int getQuickSettingsFocusedCenterX() {
+        View focusedView = getFocusedView();
+        return focusedView != null ? getRelativeCenterX(focusedView, mQuickSettingsContainer) : -1;
+    }
+
+    private int getButtonCenterX(int row, int column) {
+        int buttonIndex = getButtonIndexAtPosition(row, column);
+        if (buttonIndex < 0) {
+            return -1;
+        }
+        return getRelativeCenterX(mButtons[buttonIndex], mQuickSettingsContainer);
+    }
+
+    private int getVisibleButtonRowCount() {
+        return (mVisibleButtonIndices.size() + BUTTONS_PER_ROW - 1) / BUTTONS_PER_ROW;
+    }
+
+    private int getBrightnessRowIndex() {
+        return mSliderVisibility[SLIDER_BRIGHTNESS] ? getVisibleButtonRowCount() : -1;
+    }
+
+    private int getFirstVolumeRowIndex() {
+        return getVisibleButtonRowCount() + (mSliderVisibility[SLIDER_BRIGHTNESS] ? 1 : 0);
+    }
+
+    private int getLastRowIndex() {
+        return Math.max(ROW_FIRST_BUTTONS, getQuickSettingsContentRowCount() - 1);
+    }
+
+    private int getQuickSettingsContentRowCount() {
+        return getVisibleButtonRowCount() + getVisibleSliderRowCount();
+    }
+
+    private int getVisibleSliderRowCount() {
+        int count = 0;
+        for (boolean visible : mSliderVisibility) {
+            if (visible) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private int getButtonCountForRow(int row) {
+        if (row < 0 || row >= getVisibleButtonRowCount()) {
+            return 0;
+        }
+        int start = row * BUTTONS_PER_ROW;
+        return Math.min(BUTTONS_PER_ROW, mVisibleButtonIndices.size() - start);
+    }
+
+    private int getButtonIndexAtPosition(int row, int column) {
+        int count = getButtonCountForRow(row);
+        if (column < 0 || column >= count) {
+            return -1;
+        }
+        return mVisibleButtonIndices.get(row * BUTTONS_PER_ROW + column);
+    }
+
+    private int getVolumeControlIndexForRow(int row) {
+        int firstVolumeRow = getFirstVolumeRowIndex();
+        if (row < firstVolumeRow) {
+            return -1;
+        }
+        int currentRow = firstVolumeRow;
+        for (int i = 0; i < mVolumeControls.length; i++) {
+            if (!mSliderVisibility[SLIDER_CALL_VOLUME + i]) {
+                continue;
+            }
+            if (currentRow == row) {
+                return i;
+            }
+            currentRow++;
+        }
+        return -1;
+    }
+
+    private int getRowForVolumeControl(int volumeIndex) {
+        int currentRow = getFirstVolumeRowIndex();
+        for (int i = 0; i < mVolumeControls.length; i++) {
+            if (!mSliderVisibility[SLIDER_CALL_VOLUME + i]) {
+                continue;
+            }
+            if (i == volumeIndex) {
+                return currentRow;
+            }
+            currentRow++;
+        }
+        return -1;
+    }
+
+    private void focusButton(int buttonIndex) {
+        int position = mVisibleButtonIndices.indexOf(buttonIndex);
+        if (position < 0) {
+            return;
+        }
+        mQuickSettingsHeaderFocused = false;
+        mFocusedRow = position / BUTTONS_PER_ROW;
+        mFocusedButton = position % BUTTONS_PER_ROW;
+        updateFocus();
     }
 
     private void toggleAutoBrightness() {
@@ -1935,14 +2857,24 @@ final class QuickSettingsOverlay {
             }
             return mNotificationItems.get(mFocusedNotification).row;
         }
+        if (mShowingQuickSettingsConfig) {
+            if (mConfigItems.isEmpty() || mFocusedConfigItem >= mConfigItems.size()) {
+                return null;
+            }
+            return mConfigItems.get(mFocusedConfigItem).row;
+        }
+        if (mQuickSettingsHeaderFocused) {
+            return mSettingsButton;
+        }
         if (isBrightnessRowFocused()) {
             return mBrightnessControl.row;
         }
         if (isVolumeRowFocused()) {
             return getFocusedVolumeControl().row;
         }
-        if (mFocusedRow >= 0 && mFocusedRow < mButtonRows.length) {
-            return mButtonRows[mFocusedRow];
+        if (isButtonRowFocused()) {
+            int buttonIndex = getFocusedButtonIndex();
+            return buttonIndex >= 0 ? mButtons[buttonIndex] : null;
         }
         return null;
     }
@@ -1958,6 +2890,19 @@ final class QuickSettingsOverlay {
             current = (View) current.getParent();
         }
         return top;
+    }
+
+    private int getRelativeCenterX(View child, View ancestor) {
+        int left = 0;
+        View current = child;
+        while (current != null && current != ancestor) {
+            left += current.getLeft();
+            if (!(current.getParent() instanceof View)) {
+                break;
+            }
+            current = (View) current.getParent();
+        }
+        return left + child.getWidth() / 2;
     }
 
     private String getFocusedVolumeCaption() {
@@ -2039,6 +2984,23 @@ final class QuickSettingsOverlay {
         NotificationItem(StatusBarNotification sbn, LinearLayout row) {
             this.sbn = sbn;
             this.row = row;
+        }
+    }
+
+    private static final class ConfigItem {
+        static final int TYPE_BUTTON = 0;
+        static final int TYPE_SLIDER = 1;
+
+        final int type;
+        final int index;
+        final LinearLayout row;
+        final TextView state;
+
+        ConfigItem(int type, int index, LinearLayout row, TextView state) {
+            this.type = type;
+            this.index = index;
+            this.row = row;
+            this.state = state;
         }
     }
 
