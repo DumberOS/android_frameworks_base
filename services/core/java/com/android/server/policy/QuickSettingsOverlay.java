@@ -16,10 +16,14 @@
 
 package com.android.server.policy;
 
+import static android.app.Notification.VISIBILITY_PUBLIC;
+import static android.app.Notification.VISIBILITY_SECRET;
 import static android.view.WindowManager.LayoutParams.TYPE_KEYGUARD_DIALOG;
 
+import android.app.ActivityManager;
 import android.app.ActivityOptions;
 import android.app.INotificationManager;
+import android.app.KeyguardManager;
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -120,6 +124,8 @@ final class QuickSettingsOverlay {
     private static final int NOTIFICATION_DISMISS_DISTANCE_DP = 120;
     private static final int NOTIFICATION_SWIPE_THRESHOLD_DP = 48;
     private static final int OVERLAY_DISMISS_SWIPE_THRESHOLD_DP = 64;
+    private static final String NOTIFICATIONS_LOCKED_MESSAGE =
+            "Unlock phone to show notifications";
     private static final String[] BUTTON_LABELS = {
             "Airplane Mode",
             "Ringer Mode",
@@ -144,6 +150,7 @@ final class QuickSettingsOverlay {
     private final TetheringManager mTetheringManager;
     private final WifiManager mWifiManager;
     private final DisplayManager mDisplayManager;
+    private final KeyguardManager mKeyguardManager;
     private final NotificationManager mNotificationManager;
     private final INotificationManager mNotificationService;
     private final IStatusBarService mStatusBarService;
@@ -213,6 +220,7 @@ final class QuickSettingsOverlay {
         mTetheringManager = context.getSystemService(TetheringManager.class);
         mWifiManager = context.getSystemService(WifiManager.class);
         mDisplayManager = context.getSystemService(DisplayManager.class);
+        mKeyguardManager = context.getSystemService(KeyguardManager.class);
         mNotificationManager = context.getSystemService(NotificationManager.class);
         mNotificationService = NotificationManager.getService();
         mStatusBarService = IStatusBarService.Stub.asInterface(
@@ -939,25 +947,29 @@ final class QuickSettingsOverlay {
         mNotificationItems.clear();
         mNotificationsContainer.removeAllViews();
 
+        if (shouldHideNotificationsOnLockscreen()) {
+            showNotificationsMessage(NOTIFICATIONS_LOCKED_MESSAGE);
+            mFocusedNotification = 0;
+            return;
+        }
+
         StatusBarNotification[] notifications = getActiveNotifications();
         for (StatusBarNotification sbn : notifications) {
             if (!shouldShowNotification(sbn)) {
                 continue;
             }
-            NotificationItem item = createNotificationItem(sbn);
+            int visibility = getNotificationVisibilityForOverlay(sbn);
+            if (visibility == NotificationPresentation.HIDDEN) {
+                continue;
+            }
+            NotificationItem item = createNotificationItem(sbn, visibility);
             mNotificationItems.add(item);
             mNotificationsContainer.addView(item.row, new LinearLayout.LayoutParams(
                     WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT));
         }
 
         if (mNotificationItems.isEmpty()) {
-            TextView empty = new TextView(mContext);
-            empty.setText("No notifications");
-            empty.setTextColor(Color.WHITE);
-            empty.setTextSize(16);
-            empty.setGravity(Gravity.CENTER);
-            mNotificationsContainer.addView(empty, new LinearLayout.LayoutParams(
-                    WindowManager.LayoutParams.MATCH_PARENT, dp(72)));
+            showNotificationsMessage("No notifications");
             mFocusedNotification = 0;
             return;
         }
@@ -968,6 +980,68 @@ final class QuickSettingsOverlay {
 
     private boolean shouldShowNotification(StatusBarNotification sbn) {
         return !sbn.isAppOrSystemGroupSummary();
+    }
+
+    private void showNotificationsMessage(String message) {
+        TextView text = new TextView(mContext);
+        text.setText(message);
+        text.setTextColor(Color.WHITE);
+        text.setTextSize(16);
+        text.setGravity(Gravity.CENTER);
+        mNotificationsContainer.addView(text, new LinearLayout.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT, dp(72)));
+    }
+
+    private boolean shouldHideNotificationsOnLockscreen() {
+        int userId = getCurrentUserId();
+        return isDeviceLockedForNotifications(userId) && !userAllowsNotificationsInPublic(userId);
+    }
+
+    private int getNotificationVisibilityForOverlay(StatusBarNotification sbn) {
+        if (!isDeviceLockedForNotifications(getCurrentUserId())) {
+            return NotificationPresentation.FULL;
+        }
+
+        if (getNotificationLockscreenVisibility(sbn) == VISIBILITY_SECRET) {
+            return NotificationPresentation.HIDDEN;
+        }
+        if (!userAllowsPrivateNotificationsInPublic(getCurrentUserId())
+                && getNotificationLockscreenVisibility(sbn) != VISIBILITY_PUBLIC) {
+            return NotificationPresentation.REDACTED;
+        }
+        return NotificationPresentation.FULL;
+    }
+
+    private int getNotificationLockscreenVisibility(StatusBarNotification sbn) {
+        Notification notification = sbn.getNotification();
+        if (notification == null) {
+            return Notification.VISIBILITY_PRIVATE;
+        }
+        return notification.visibility;
+    }
+
+    private boolean userAllowsNotificationsInPublic(int userId) {
+        return Settings.Secure.getIntForUser(
+                mContext.getContentResolver(),
+                Settings.Secure.LOCK_SCREEN_SHOW_NOTIFICATIONS,
+                1,
+                userId) != 0;
+    }
+
+    private boolean userAllowsPrivateNotificationsInPublic(int userId) {
+        return Settings.Secure.getIntForUser(
+                mContext.getContentResolver(),
+                Settings.Secure.LOCK_SCREEN_ALLOW_PRIVATE_NOTIFICATIONS,
+                0,
+                userId) != 0;
+    }
+
+    private boolean isDeviceLockedForNotifications(int userId) {
+        return mKeyguardManager != null && userId >= 0 && mKeyguardManager.isDeviceLocked(userId);
+    }
+
+    private int getCurrentUserId() {
+        return ActivityManager.getCurrentUser();
     }
 
     private Notification.Action[] getVisibleNotificationActions(StatusBarNotification sbn) {
@@ -1166,7 +1240,7 @@ final class QuickSettingsOverlay {
         return new StatusBarNotification[0];
     }
 
-    private NotificationItem createNotificationItem(StatusBarNotification sbn) {
+    private NotificationItem createNotificationItem(StatusBarNotification sbn, int visibility) {
         LinearLayout row = new LinearLayout(mContext);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
@@ -1191,7 +1265,7 @@ final class QuickSettingsOverlay {
         row.addView(textColumn, textParams);
 
         TextView title = new TextView(mContext);
-        title.setText(getNotificationTitle(sbn));
+        title.setText(getNotificationTitle(sbn, visibility));
         title.setTextColor(Color.WHITE);
         title.setTextSize(15);
         title.setSingleLine(true);
@@ -1199,7 +1273,7 @@ final class QuickSettingsOverlay {
                 WindowManager.LayoutParams.MATCH_PARENT, dp(28)));
 
         TextView description = new TextView(mContext);
-        description.setText(getNotificationDescription(notification));
+        description.setText(getNotificationDescription(sbn, visibility));
         description.setTextColor(0xffc7d0d9);
         description.setTextSize(12);
         description.setSingleLine(true);
@@ -1207,12 +1281,14 @@ final class QuickSettingsOverlay {
         textColumn.addView(description, new LinearLayout.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT, dp(24)));
 
-        boolean hasProgress = hasNotificationProgress(notification);
+        boolean hasProgress = visibility == NotificationPresentation.FULL
+                && hasNotificationProgress(notification);
         if (hasProgress) {
             addNotificationProgressBar(textColumn, notification);
         }
 
-        String actionSummary = getNotificationActionSummary(sbn);
+        String actionSummary = visibility == NotificationPresentation.FULL
+                ? getNotificationActionSummary(sbn) : "";
         int minimumHeightDp = 76;
         if (hasProgress) {
             minimumHeightDp += 16;
@@ -1232,7 +1308,8 @@ final class QuickSettingsOverlay {
                     WindowManager.LayoutParams.MATCH_PARENT, dp(22)));
         }
 
-        NotificationItem item = new NotificationItem(sbn, row);
+        NotificationItem item = new NotificationItem(sbn, row,
+                visibility == NotificationPresentation.REDACTED);
         addNotificationTouchHandler(item);
         return item;
     }
@@ -1285,11 +1362,32 @@ final class QuickSettingsOverlay {
         return true;
     }
 
-    private String getNotificationTitle(StatusBarNotification sbn) {
-        CharSequence title = sbn.getNotification().extras.getCharSequence(Notification.EXTRA_TITLE);
+    private String getNotificationTitle(StatusBarNotification sbn, int visibility) {
+        if (visibility == NotificationPresentation.REDACTED) {
+            Notification publicVersion = sbn.getNotification().publicVersion;
+            if (publicVersion != null) {
+                CharSequence publicTitle = getNotificationTitleFromNotification(publicVersion);
+                if (!TextUtils.isEmpty(publicTitle)) {
+                    return publicTitle.toString();
+                }
+            }
+            return getNotificationAppLabel(sbn);
+        }
+        CharSequence title = getNotificationTitleFromNotification(sbn.getNotification());
         if (title != null && title.length() > 0) {
             return title.toString();
         }
+        return getNotificationAppLabel(sbn);
+    }
+
+    private CharSequence getNotificationTitleFromNotification(Notification notification) {
+        if (notification == null || notification.extras == null) {
+            return null;
+        }
+        return notification.extras.getCharSequence(Notification.EXTRA_TITLE);
+    }
+
+    private String getNotificationAppLabel(StatusBarNotification sbn) {
         try {
             PackageManager packageManager = mContext.getPackageManager();
             return packageManager.getApplicationLabel(
@@ -1299,7 +1397,24 @@ final class QuickSettingsOverlay {
         }
     }
 
+    private String getNotificationDescription(StatusBarNotification sbn, int visibility) {
+        if (visibility == NotificationPresentation.REDACTED) {
+            Notification publicVersion = sbn.getNotification().publicVersion;
+            if (publicVersion != null) {
+                String publicDescription = getNotificationDescription(publicVersion);
+                if (!TextUtils.isEmpty(publicDescription)) {
+                    return publicDescription;
+                }
+            }
+            return mContext.getString(com.android.internal.R.string.notification_hidden_text);
+        }
+        return getNotificationDescription(sbn.getNotification());
+    }
+
     private String getNotificationDescription(Notification notification) {
+        if (notification == null || notification.extras == null) {
+            return "";
+        }
         CharSequence text = notification.extras.getCharSequence(Notification.EXTRA_BIG_TEXT);
         if (text == null || text.length() == 0) {
             text = notification.extras.getCharSequence(Notification.EXTRA_TEXT);
@@ -1406,13 +1521,7 @@ final class QuickSettingsOverlay {
             return;
         }
 
-        TextView empty = new TextView(mContext);
-        empty.setText("No notifications");
-        empty.setTextColor(Color.WHITE);
-        empty.setTextSize(16);
-        empty.setGravity(Gravity.CENTER);
-        mNotificationsContainer.addView(empty, new LinearLayout.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT, dp(72)));
+        showNotificationsMessage("No notifications");
         mFocusedNotification = 0;
     }
 
@@ -1421,7 +1530,7 @@ final class QuickSettingsOverlay {
             return;
         }
         NotificationItem item = mNotificationItems.get(mFocusedNotification);
-        if (getVisibleNotificationActions(item.sbn).length > 0) {
+        if (!item.redacted && getVisibleNotificationActions(item.sbn).length > 0) {
             showNotificationActionMenu(item);
             return;
         }
@@ -2070,7 +2179,11 @@ final class QuickSettingsOverlay {
                             focused ? 0xffffffff : 0xff4c5963, dp(12)));
                 }
                 mCaption.setText(mActionMenuSourceItem != null
-                        ? getNotificationTitle(mActionMenuSourceItem.sbn) : "Notification");
+                        ? getNotificationTitle(mActionMenuSourceItem.sbn,
+                                mActionMenuSourceItem.redacted
+                                        ? NotificationPresentation.REDACTED
+                                        : NotificationPresentation.FULL)
+                        : "Notification");
                 scrollFocusedItemIntoView();
                 return;
             }
@@ -2980,11 +3093,19 @@ final class QuickSettingsOverlay {
     private static final class NotificationItem {
         final StatusBarNotification sbn;
         final LinearLayout row;
+        final boolean redacted;
 
-        NotificationItem(StatusBarNotification sbn, LinearLayout row) {
+        NotificationItem(StatusBarNotification sbn, LinearLayout row, boolean redacted) {
             this.sbn = sbn;
             this.row = row;
+            this.redacted = redacted;
         }
+    }
+
+    private static final class NotificationPresentation {
+        static final int HIDDEN = 0;
+        static final int REDACTED = 1;
+        static final int FULL = 2;
     }
 
     private static final class ConfigItem {
