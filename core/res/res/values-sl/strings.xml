@@ -2396,4 +2396,21 @@
     <string name="satellite_notification_open_message" msgid="4149234979688273729">"Odpri Sporočila"</string>
     <string name="satellite_notification_how_it_works" msgid="3132069321977520519">"Kako deluje"</string>
     <string name="prox_touch_block_message">Preprečevanje nenamernih dotikov. Pritisnite Nazaj za zapiranje.</string>
-</resources>
+    <string-array name="quick_settings_overlay_button_labels">
+        <item>Letalski način</item>
+        <item>Način zvonjenja</item>
+        <item>Ne moti</item>
+        <item>Dostopna točka Wi-Fi</item>
+        <item>Varčevanje z baterijo</item>
+        <item>Zaslon na dotik</item>
+        <item>Mobilni podatki</item>
+        <item>Svetilka</item>
+        <item>Wi-Fi</item>
+        <item>Bluetooth</item>
+        <item>Deljenje povezave USB</item>
+        <item>Odpravljanje napak USB</item>
+    </string-array>
+    <string name="quick_settings_overlay_notifications">Obvestila</string>
+    <string name="quick_settings_overlay_no_notifications">Ni obvestil</string>
+    <string name="quick_settings_overlay_shown">Prikazano</string>
+    <string name="quick_settings_overlay_hidden">Skrito</string></resources>

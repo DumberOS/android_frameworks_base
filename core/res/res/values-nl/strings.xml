@@ -2394,4 +2394,22 @@
     <string name="satellite_notification_open_message" msgid="4149234979688273729">"Berichten openen"</string>
     <string name="satellite_notification_how_it_works" msgid="3132069321977520519">"Hoe het werkt"</string>
     <string name="prox_touch_block_message">Onbedoelde aanrakingen voorkomen. Druk op Terug om te sluiten.</string>
+    <string-array name="quick_settings_overlay_button_labels">
+        <item>Vliegtuigmodus</item>
+        <item>Belmodus</item>
+        <item>Niet storen</item>
+        <item>Wi-Fi-hotspot</item>
+        <item>Batterijbesparing</item>
+        <item>Aanraakscherm</item>
+        <item>Mobiele data</item>
+        <item>Zaklamp</item>
+        <item>Wi-Fi</item>
+        <item>Bluetooth</item>
+        <item>USB-tethering</item>
+        <item>USB-foutopsporing</item>
+    </string-array>
+    <string name="quick_settings_overlay_notifications">Meldingen</string>
+    <string name="quick_settings_overlay_no_notifications">Geen meldingen</string>
+    <string name="quick_settings_overlay_shown">Getoond</string>
+    <string name="quick_settings_overlay_hidden">Verborgen</string>
 </resources>

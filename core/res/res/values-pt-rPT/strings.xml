@@ -2395,4 +2395,23 @@
     <string name="satellite_notification_open_message" msgid="4149234979688273729">"Abre a app Mensagens"</string>
     <string name="satellite_notification_how_it_works" msgid="3132069321977520519">"Como funciona"</string>
     <string name="prox_touch_block_message">A evitar toques acidentais. Prima Retroceder para fechar.</string>
+    <string-array name="quick_settings_overlay_button_labels">
+        <item>Modo de avião</item>
+        <item>Modo de toque</item>
+        <item>Não incomodar</item>
+        <item>Ponto de acesso Wi-Fi</item>
+        <item>Poupança de bateria</item>
+        <item>Ecrã tátil</item>
+        <item>Dados móveis</item>
+        <item>Lanterna</item>
+        <item>Wi-Fi</item>
+        <item>Bluetooth</item>
+        <item>Partilha USB</item>
+        <item>Depuração USB</item>
+    </string-array>
+    <string name="quick_settings_overlay_notifications">Notificações</string>
+    <string name="quick_settings_overlay_no_notifications">Sem notificações</string>
+    <string name="quick_settings_overlay_shown">Mostrado</string>
+    <string name="quick_settings_overlay_hidden">Oculto</string>
+</resources>
 </resources>

@@ -3684,6 +3684,35 @@
         <item>VPN</item>
     </string-array>
 
+    <!-- Labels shown for each quick settings button in the quick settings overlay. These must
+         stay in the same order as the BUTTON_* constants in QuickSettingsOverlay. -->
+    <string-array name="quick_settings_overlay_button_labels">
+        <item>Airplane Mode</item>
+        <item>Ringer Mode</item>
+        <item>Do Not Disturb</item>
+        <item>Wi-Fi Hotspot</item>
+        <item>Battery Saver</item>
+        <item>Touchscreen</item>
+        <item>Mobile Data</item>
+        <item>Flashlight</item>
+        <item>Wi-Fi</item>
+        <item>Bluetooth</item>
+        <item>USB Tethering</item>
+        <item>USB Debugging</item>
+    </string-array>
+
+    <!-- Caption shown when the notifications list is focused in the quick settings overlay. -->
+    <string name="quick_settings_overlay_notifications">Notifications</string>
+
+    <!-- Empty-state message shown when there are no notifications in the quick settings overlay. -->
+    <string name="quick_settings_overlay_no_notifications">No notifications</string>
+
+    <!-- State text shown for a visible item in the quick settings overlay configuration screen. -->
+    <string name="quick_settings_overlay_shown">Shown</string>
+
+    <!-- State text shown for a hidden item in the quick settings overlay configuration screen. -->
+    <string name="quick_settings_overlay_hidden">Hidden</string>
+
     <!-- Network type name displayed if one of the types is not found in network_switch_type_name. -->
     <string name="network_switch_type_name_unknown">an unknown network type</string>
 

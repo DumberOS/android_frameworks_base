@@ -2394,4 +2394,22 @@
     <string name="satellite_notification_open_message" msgid="4149234979688273729">"Åbn Beskeder"</string>
     <string name="satellite_notification_how_it_works" msgid="3132069321977520519">"Sådan fungerer det"</string>
     <string name="prox_touch_block_message">Forhindrer utilsigtede berøringer. Tryk på Tilbage for at lukke.</string>
+    <string-array name="quick_settings_overlay_button_labels">
+    <item>Flytilstand</item>
+    <item>Ringetilstand</item>
+    <item>Forstyr ikke</item>
+    <item>Wi-Fi-hotspot</item>
+    <item>Batterisparer</item>
+    <item>Berøringsskærm</item>
+    <item>Mobildata</item>
+    <item>Lommelygte</item>
+    <item>Wi-Fi</item>
+    <item>Bluetooth</item>
+    <item>USB-deling</item>
+    <item>USB-fejlfinding</item>
+    </string-array>
+    <string name="quick_settings_overlay_notifications">Notifikationer</string>
+    <string name="quick_settings_overlay_no_notifications">Ingen notifikationer</string>
+    <string name="quick_settings_overlay_shown">Vist</string>
+    <string name="quick_settings_overlay_hidden">Skjult</string>
 </resources>

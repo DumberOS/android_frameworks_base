@@ -126,20 +126,6 @@ final class QuickSettingsOverlay {
     private static final int OVERLAY_DISMISS_SWIPE_THRESHOLD_DP = 64;
     private static final String NOTIFICATIONS_LOCKED_MESSAGE =
             "Unlock phone to show notifications";
-    private static final String[] BUTTON_LABELS = {
-            "Airplane Mode",
-            "Ringer Mode",
-            "Do Not Disturb",
-            "Wi-Fi Hotspot",
-            "Battery Saver",
-            "Touchscreen",
-            "Mobile Data",
-            "Flashlight",
-            "Wi-Fi",
-            "Bluetooth",
-            "USB Tethering",
-            "USB Debugging",
-    };
     private final Runnable mSyncTouchscreenStateRunnable = this::syncTouchscreenState;
     private final Runnable mSyncAsyncToggleStatesRunnable = this::syncAsyncToggleStates;
 
@@ -171,6 +157,11 @@ final class QuickSettingsOverlay {
     private final LinearLayout[] mButtonRows = new LinearLayout[BUTTON_ROW_COUNT];
     private final LinearLayout[] mButtons = new LinearLayout[BUTTON_COUNT];
     private final TextView[] mButtonStates = new TextView[BUTTON_COUNT];
+    private final String[] mButtonLabels;
+    private final String mNotificationsEmptyLabel;
+    private final String mNotificationsCaption;
+    private final String mConfigItemShownLabel;
+    private final String mConfigItemHiddenLabel;
     private final boolean[] mButtonVisibility = new boolean[BUTTON_COUNT];
     private final boolean[] mSliderVisibility = new boolean[SLIDER_COUNT];
     private final BrightnessControl mBrightnessControl;
@@ -231,6 +222,16 @@ final class QuickSettingsOverlay {
         mInputManager = context.getSystemService(InputManager.class);
         mAutomaticBrightnessAvailable = context.getResources().getBoolean(
                 com.android.internal.R.bool.config_automatic_brightness_available);
+        mButtonLabels = context.getResources().getStringArray(
+                com.android.internal.R.array.quick_settings_overlay_button_labels);
+        mNotificationsEmptyLabel = context.getResources().getString(
+                com.android.internal.R.string.quick_settings_overlay_no_notifications);
+        mNotificationsCaption = context.getResources().getString(
+                com.android.internal.R.string.quick_settings_overlay_notifications);
+        mConfigItemShownLabel = context.getResources().getString(
+                com.android.internal.R.string.quick_settings_overlay_shown);
+        mConfigItemHiddenLabel = context.getResources().getString(
+                com.android.internal.R.string.quick_settings_overlay_hidden);
         loadButtonVisibility();
         loadSliderVisibility();
 
@@ -657,7 +658,7 @@ final class QuickSettingsOverlay {
         row.addView(icon, new LinearLayout.LayoutParams(dp(24), dp(24)));
 
         TextView label = new TextView(mContext);
-        label.setText(BUTTON_LABELS[buttonIndex]);
+        label.setText(mButtonLabels[buttonIndex]);
         label.setTextColor(Color.WHITE);
         label.setTextSize(15);
         LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(
@@ -969,7 +970,7 @@ final class QuickSettingsOverlay {
         }
 
         if (mNotificationItems.isEmpty()) {
-            showNotificationsMessage("No notifications");
+            showNotificationsMessage(mNotificationsEmptyLabel);
             mFocusedNotification = 0;
             return;
         }
@@ -1521,7 +1522,7 @@ final class QuickSettingsOverlay {
             return;
         }
 
-        showNotificationsMessage("No notifications");
+        showNotificationsMessage(mNotificationsEmptyLabel);
         mFocusedNotification = 0;
     }
 
@@ -2193,7 +2194,7 @@ final class QuickSettingsOverlay {
                 item.row.setBackground(makeBackground(focused ? 0xff2d6cdf : 0xff263038,
                         focused ? 0xffffffff : 0xff4c5963, dp(12)));
             }
-            mCaption.setText("Notifications");
+            mCaption.setText(mNotificationsCaption);
             scrollFocusedItemIntoView();
             return;
         }
@@ -2238,7 +2239,7 @@ final class QuickSettingsOverlay {
         } else if (isVolumeRowFocused()) {
             mCaption.setText(getFocusedVolumeCaption());
         } else {
-            mCaption.setText(BUTTON_LABELS[getFocusedButtonIndex()]);
+            mCaption.setText(mButtonLabels[getFocusedButtonIndex()]);
         }
         scrollFocusedItemIntoView();
     }
@@ -2612,7 +2613,8 @@ final class QuickSettingsOverlay {
             mButtonRows[row].setVisibility(rowHasVisibleButtons(row) ? View.VISIBLE : View.GONE);
         }
         for (ConfigItem item : mConfigItems) {
-            item.state.setText(isConfigItemVisible(item) ? "Shown" : "Hidden");
+            item.state.setText(isConfigItemVisible(item)
+                    ? mConfigItemShownLabel : mConfigItemHiddenLabel);
         }
         mBrightnessControl.row.setVisibility(mSliderVisibility[SLIDER_BRIGHTNESS]
                 ? View.VISIBLE : View.GONE);

@@ -2394,4 +2394,22 @@
     <string name="satellite_notification_open_message" msgid="4149234979688273729">"Avaa Messages"</string>
     <string name="satellite_notification_how_it_works" msgid="3132069321977520519">"Näin se toimii"</string>
     <string name="prox_touch_block_message">Estetään tahattomat kosketukset. Paina Takaisin sulkeaksesi.</string>
+    <string-array name="quick_settings_overlay_button_labels">
+        <item>Lentotila</item>
+        <item>Äänitila</item>
+        <item>Älä häiritse</item>
+        <item>Wi-Fi-hotspot</item>
+        <item>Virransäästötila</item>
+        <item>Kosketusnäyttö</item>
+        <item>Mobiilidata</item>
+        <item>Taskulamppu</item>
+        <item>Wi-Fi</item>
+        <item>Bluetooth</item>
+        <item>USB-jakaminen</item>
+        <item>USB-virheenkorjaus</item>
+    </string-array>
+    <string name="quick_settings_overlay_notifications">Ilmoitukset</string>
+    <string name="quick_settings_overlay_no_notifications">Ei ilmoituksia</string>
+    <string name="quick_settings_overlay_shown">Näytetty</string>
+    <string name="quick_settings_overlay_hidden">Piilotettu</string>
 </resources>

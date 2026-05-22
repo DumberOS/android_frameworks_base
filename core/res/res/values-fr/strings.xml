@@ -2395,4 +2395,22 @@
     <string name="satellite_notification_open_message" msgid="4149234979688273729">"Ouvrir Messages"</string>
     <string name="satellite_notification_how_it_works" msgid="3132069321977520519">"Fonctionnement"</string>
     <string name="prox_touch_block_message">Prévention des appuis accidentels. Appuyez sur Retour pour fermer.</string>
+    <string-array name="quick_settings_overlay_button_labels">
+        <item>Mode avion</item>
+        <item>Mode sonnerie</item>
+        <item>Ne pas déranger</item>
+        <item>Point d’accès Wi-Fi</item>
+        <item>Économiseur de batterie</item>
+        <item>Écran tactile</item>
+        <item>Données mobiles</item>
+        <item>Lampe torche</item>
+        <item>Wi-Fi</item>
+        <item>Bluetooth</item>
+        <item>Partage de connexion USB</item>
+        <item>Débogage USB</item>
+    </string-array>
+    <string name="quick_settings_overlay_notifications">Notifications</string>
+    <string name="quick_settings_overlay_no_notifications">Aucune notification</string>
+    <string name="quick_settings_overlay_shown">Affiché</string>
+    <string name="quick_settings_overlay_hidden">Masqué</string>
 </resources>
