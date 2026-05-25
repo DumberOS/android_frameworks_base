@@ -12,6 +12,7 @@ import android.util.Pair;
 import android.content.pm.IPackageManager;
 import android.os.ServiceManager;
 import android.content.pm.PackageInfo;
+import android.os.SystemProperties;
 import android.os.RemoteException;
 import androidx.annotation.Nullable;
 import android.system.keystore2.KeyEntryResponse;
@@ -84,6 +85,7 @@ import android.annotation.FlaggedApi;
 public final class CertHack {
     private CertHack() {}
     private static final ASN1ObjectIdentifier OID = new ASN1ObjectIdentifier("1.3.6.1.4.1.11129.2.1.17");
+    private static final String DISABLE_PROPERTY = "persist.sys.dumbdroid.disable_certhack";
     private static final Set<String> DISABLED_PACKAGE = Set.of("no.vipps.bankid", "no.dnb.vipps");
 
     private static final int ATTESTATION_APPLICATION_ID_PACKAGE_INFOS_INDEX = 0;
@@ -103,15 +105,23 @@ public final class CertHack {
     private static final int ATTESTATION_PACKAGE_INFO_VERSION_INDEX = 1;
 
     static boolean canHack() {
-        return !keyboxes.isEmpty();
+        return !isHackGloballyDisabled() && !keyboxes.isEmpty();
     }
 
     public static boolean canHackForUid(int uid) {
         return canHack() && !isHackDisabledForUid(uid);
     }
 
+    public static boolean isHackGloballyDisabled() {
+        return SystemProperties.getBoolean(DISABLE_PROPERTY, false);
+    }
+
     public static boolean isHackDisabledForUid(int uid) {
         try {
+            if (isHackGloballyDisabled()) {
+                Logger.i("disabling CertHack globally using property " + DISABLE_PROPERTY);
+                return true;
+            }
             IPackageManager pm = IPackageManager.Stub.asInterface(ServiceManager.getService("package"));
             if (pm == null) {
                 Logger.e("isHackDisabledForUid: package manager unavailable");
