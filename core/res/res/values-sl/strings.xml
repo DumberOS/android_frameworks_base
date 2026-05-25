@@ -2413,4 +2413,9 @@
     <string name="quick_settings_overlay_notifications">Obvestila</string>
     <string name="quick_settings_overlay_no_notifications">Ni obvestil</string>
     <string name="quick_settings_overlay_shown">Prikazano</string>
-    <string name="quick_settings_overlay_hidden">Skrito</string></resources>
+    <string name="quick_settings_overlay_hidden">Skrito</string>
+    <string name="quick_settings_overlay_call_volume">Glasnost dohodnih klicev</string>
+    <string name="quick_settings_overlay_media_volume">Glasnost predstavnosti</string>
+    <string name="quick_settings_overlay_notification_volume">Glasnost obvestila</string>
+    <string name="quick_settings_overlay_alarm_volume">Glasnost alarma</string>
+</resources>

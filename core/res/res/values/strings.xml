@@ -3713,6 +3713,18 @@
     <!-- State text shown for a hidden item in the quick settings overlay configuration screen. -->
     <string name="quick_settings_overlay_hidden">Hidden</string>
 
+    <!-- Label shown for the in-call volume slider in the quick settings overlay. -->
+    <string name="quick_settings_overlay_call_volume">Call Volume</string>
+
+    <!-- Label shown for the media volume slider in the quick settings overlay. -->
+    <string name="quick_settings_overlay_media_volume">Media Volume</string>
+
+    <!-- Label shown for the notification volume slider in the quick settings overlay. -->
+    <string name="quick_settings_overlay_notification_volume">Notification Volume</string>
+
+    <!-- Label shown for the alarm volume slider in the quick settings overlay. -->
+    <string name="quick_settings_overlay_alarm_volume">Alarm Volume</string>
+
     <!-- Network type name displayed if one of the types is not found in network_switch_type_name. -->
     <string name="network_switch_type_name_unknown">an unknown network type</string>
 

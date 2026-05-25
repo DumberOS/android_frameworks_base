@@ -2413,5 +2413,8 @@
     <string name="quick_settings_overlay_no_notifications">Sem notificações</string>
     <string name="quick_settings_overlay_shown">Mostrado</string>
     <string name="quick_settings_overlay_hidden">Oculto</string>
-</resources>
+    <string name="quick_settings_overlay_call_volume">Volume da chamada recebida</string>
+    <string name="quick_settings_overlay_media_volume">Volume de multimédia</string>
+    <string name="quick_settings_overlay_notification_volume">Volume das notificações</string>
+    <string name="quick_settings_overlay_alarm_volume">Volume do alarme</string>
 </resources>

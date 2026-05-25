@@ -2411,4 +2411,9 @@
     <string name="quick_settings_overlay_notifications">Ειδοποιήσεις</string>
     <string name="quick_settings_overlay_no_notifications">Καμία ειδοποίηση</string>
     <string name="quick_settings_overlay_shown">Εμφανίζεται</string>
-    <string name="quick_settings_overlay_hidden">Κρυφό</string></resources>
+    <string name="quick_settings_overlay_hidden">Κρυφό</string>
+    <string name="quick_settings_overlay_call_volume">Ένταση ήχου κλήσης</string>
+    <string name="quick_settings_overlay_media_volume">Ένταση ήχου πολυμέσων</string>
+    <string name="quick_settings_overlay_notification_volume">Ένταση ήχου ειδοποίησης</string>
+    <string name="quick_settings_overlay_alarm_volume">Ένταση ήχου ξυπνητηριού</string>
+</resources>

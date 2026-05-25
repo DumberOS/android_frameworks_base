@@ -2412,4 +2412,8 @@
     <string name="quick_settings_overlay_no_notifications">Ei ilmoituksia</string>
     <string name="quick_settings_overlay_shown">Näytetty</string>
     <string name="quick_settings_overlay_hidden">Piilotettu</string>
+    <string name="quick_settings_overlay_call_volume">Puhelun äänenvoimakkuus</string>
+    <string name="quick_settings_overlay_media_volume">Median äänenvoimakkuus</string>
+    <string name="quick_settings_overlay_notification_volume">Ilmoituksen äänenvoimakkuus</string>
+    <string name="quick_settings_overlay_alarm_volume">Hälytyksien äänenvoimakkuus</string>
 </resources>

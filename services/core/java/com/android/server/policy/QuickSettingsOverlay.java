@@ -162,6 +162,10 @@ final class QuickSettingsOverlay {
     private final String mNotificationsCaption;
     private final String mConfigItemShownLabel;
     private final String mConfigItemHiddenLabel;
+    private final String mCallVolumeLabel;
+    private final String mMediaVolumeLabel;
+    private final String mNotificationVolumeLabel;
+    private final String mAlarmVolumeLabel;
     private final boolean[] mButtonVisibility = new boolean[BUTTON_COUNT];
     private final boolean[] mSliderVisibility = new boolean[SLIDER_COUNT];
     private final BrightnessControl mBrightnessControl;
@@ -232,6 +236,14 @@ final class QuickSettingsOverlay {
                 com.android.internal.R.string.quick_settings_overlay_shown);
         mConfigItemHiddenLabel = context.getResources().getString(
                 com.android.internal.R.string.quick_settings_overlay_hidden);
+        mCallVolumeLabel = context.getResources().getString(
+                com.android.internal.R.string.quick_settings_overlay_call_volume);
+        mMediaVolumeLabel = context.getResources().getString(
+                com.android.internal.R.string.quick_settings_overlay_media_volume);
+        mNotificationVolumeLabel = context.getResources().getString(
+                com.android.internal.R.string.quick_settings_overlay_notification_volume);
+        mAlarmVolumeLabel = context.getResources().getString(
+                com.android.internal.R.string.quick_settings_overlay_alarm_volume);
         loadButtonVisibility();
         loadSliderVisibility();
 
@@ -381,14 +393,15 @@ final class QuickSettingsOverlay {
 
         mBrightnessControl = addBrightnessControl();
         addQuickSettingsConfigSliderItem(SLIDER_BRIGHTNESS, "Brightness");
-        addVolumeControl(0, "Call Volume", AudioManager.STREAM_VOICE_CALL, 0xff35a7ff);
-        addQuickSettingsConfigSliderItem(SLIDER_CALL_VOLUME, "Call Volume");
-        addVolumeControl(1, "Media Volume", AudioManager.STREAM_MUSIC, 0xff30d158);
-        addQuickSettingsConfigSliderItem(SLIDER_MEDIA_VOLUME, "Media Volume");
-        addVolumeControl(2, "Notification Volume", AudioManager.STREAM_NOTIFICATION, 0xffffb020);
-        addQuickSettingsConfigSliderItem(SLIDER_NOTIFICATION_VOLUME, "Notification Volume");
-        addVolumeControl(3, "Alarm Volume", AudioManager.STREAM_ALARM, 0xffff5f57);
-        addQuickSettingsConfigSliderItem(SLIDER_ALARM_VOLUME, "Alarm Volume");
+        addVolumeControl(0, mCallVolumeLabel, AudioManager.STREAM_VOICE_CALL, 0xff35a7ff);
+        addQuickSettingsConfigSliderItem(SLIDER_CALL_VOLUME, mCallVolumeLabel);
+        addVolumeControl(1, mMediaVolumeLabel, AudioManager.STREAM_MUSIC, 0xff30d158);
+        addQuickSettingsConfigSliderItem(SLIDER_MEDIA_VOLUME, mMediaVolumeLabel);
+        addVolumeControl(2, mNotificationVolumeLabel, AudioManager.STREAM_NOTIFICATION,
+                0xffffb020);
+        addQuickSettingsConfigSliderItem(SLIDER_NOTIFICATION_VOLUME, mNotificationVolumeLabel);
+        addVolumeControl(3, mAlarmVolumeLabel, AudioManager.STREAM_ALARM, 0xffff5f57);
+        addQuickSettingsConfigSliderItem(SLIDER_ALARM_VOLUME, mAlarmVolumeLabel);
 
         applyButtonVisibility();
         updateState();

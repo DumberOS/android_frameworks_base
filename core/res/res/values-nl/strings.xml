@@ -2412,4 +2412,8 @@
     <string name="quick_settings_overlay_no_notifications">Geen meldingen</string>
     <string name="quick_settings_overlay_shown">Getoond</string>
     <string name="quick_settings_overlay_hidden">Verborgen</string>
+    <string name="quick_settings_overlay_call_volume">Volume inkomend gesprek</string>
+    <string name="quick_settings_overlay_media_volume">Mediavolume</string>
+    <string name="quick_settings_overlay_notification_volume">Meldingsvolume</string>
+    <string name="quick_settings_overlay_alarm_volume">Wekkervolume</string>
 </resources>

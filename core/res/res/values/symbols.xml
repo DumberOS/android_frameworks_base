@@ -30,6 +30,10 @@
   <java-symbol type="string" name="quick_settings_overlay_no_notifications" />
   <java-symbol type="string" name="quick_settings_overlay_shown" />
   <java-symbol type="string" name="quick_settings_overlay_hidden" />
+  <java-symbol type="string" name="quick_settings_overlay_call_volume" />
+  <java-symbol type="string" name="quick_settings_overlay_media_volume" />
+  <java-symbol type="string" name="quick_settings_overlay_notification_volume" />
+  <java-symbol type="string" name="quick_settings_overlay_alarm_volume" />
   <java-symbol type="array" name="quick_settings_overlay_button_labels" />
   <java-symbol type="id" name="account_name" />
   <java-symbol type="id" name="account_row_icon" />

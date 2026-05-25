@@ -2412,4 +2412,8 @@
     <string name="quick_settings_overlay_no_notifications">Keine Benachrichtigungen</string>
     <string name="quick_settings_overlay_shown">Angezeigt</string>
     <string name="quick_settings_overlay_hidden">Ausgeblendet</string>
+    <string name="quick_settings_overlay_call_volume">Hörerlautstärke</string>
+    <string name="quick_settings_overlay_media_volume">Medienlautstärke</string>
+    <string name="quick_settings_overlay_notification_volume">Benachrichtigungslautstärke</string>
+    <string name="quick_settings_overlay_alarm_volume">Lautstärke für Wecker</string>
 </resources>
