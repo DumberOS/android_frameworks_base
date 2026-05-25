@@ -603,9 +603,18 @@ public class NotificationShadeWindowViewController implements Dumpable {
                 return handled;
             }
 
+            private boolean isKeyguardBouncerShowing() {
+                if (DeviceEntryUdfpsRefactor.isEnabled()) {
+                    return mPrimaryBouncerInteractor.isBouncerShowing()
+                            || mAlternateBouncerInteractor.isVisibleState();
+                }
+                return mService.isBouncerShowing();
+            }
+
             private boolean handleQuickSettingsOverlayIntercept(MotionEvent ev) {
                 if (mStatusBarStateController.getState() != KEYGUARD
-                        || mStatusBarStateController.isDozing()) {
+                        || mStatusBarStateController.isDozing()
+                        || isKeyguardBouncerShowing()) {
                     mTrackingQuickSettingsOverlayGesture = false;
                     mQuickSettingsOverlayGestureShown = false;
                     mQuickSettingsOverlayTopGestureCandidate = false;
