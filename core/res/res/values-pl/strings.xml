@@ -2411,9 +2411,12 @@
         <item>Debugowanie USB</item>
     </string-array>
     <string name="quick_settings_overlay_notifications">Powiadomienia</string>
+    <string name="quick_settings_overlay_configure">Skonfiguruj szybkie ustawienia</string>
     <string name="quick_settings_overlay_no_notifications">Brak powiadomień</string>
     <string name="quick_settings_overlay_shown">Widoczne</string>
     <string name="quick_settings_overlay_hidden">Ukryte</string>
+    <string name="quick_settings_overlay_brightness">Jasność</string>
+    <string name="quick_settings_overlay_adaptive_brightness">Automatyczna jasność</string>
     <string name="quick_settings_overlay_call_volume">Głośność podczas połączenia</string>
     <string name="quick_settings_overlay_media_volume">Głośność multimediów</string>
     <string name="quick_settings_overlay_notification_volume">Głośność powiadomienia</string>

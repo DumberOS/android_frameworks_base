@@ -2409,9 +2409,12 @@
         <item>USB-foutopsporing</item>
     </string-array>
     <string name="quick_settings_overlay_notifications">Meldingen</string>
+    <string name="quick_settings_overlay_configure">Snelle instellingen configureren</string>
     <string name="quick_settings_overlay_no_notifications">Geen meldingen</string>
     <string name="quick_settings_overlay_shown">Getoond</string>
     <string name="quick_settings_overlay_hidden">Verborgen</string>
+    <string name="quick_settings_overlay_brightness">Helderheid</string>
+    <string name="quick_settings_overlay_adaptive_brightness">Aanpasbare helderheid</string>
     <string name="quick_settings_overlay_call_volume">Volume inkomend gesprek</string>
     <string name="quick_settings_overlay_media_volume">Mediavolume</string>
     <string name="quick_settings_overlay_notification_volume">Meldingsvolume</string>

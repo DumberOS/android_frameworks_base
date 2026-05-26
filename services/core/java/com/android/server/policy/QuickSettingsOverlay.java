@@ -95,6 +95,7 @@ final class QuickSettingsOverlay {
     private static final int BUTTON_ROW_COUNT = 3;
     private static final int VOLUME_COUNT = 4;
     private static final int BRIGHTNESS_STEPS = 10;
+    private static final int HEADER_HEIGHT_DP = 64;
     private static final int VOLUME_ROW_HEIGHT_DP = 56;
     private static final int LEGACY_BUTTON_COUNT = 8;
 
@@ -160,8 +161,11 @@ final class QuickSettingsOverlay {
     private final String[] mButtonLabels;
     private final String mNotificationsEmptyLabel;
     private final String mNotificationsCaption;
+    private final String mConfigureQuickSettingsLabel;
     private final String mConfigItemShownLabel;
     private final String mConfigItemHiddenLabel;
+    private final String mBrightnessLabel;
+    private final String mAdaptiveBrightnessLabel;
     private final String mCallVolumeLabel;
     private final String mMediaVolumeLabel;
     private final String mNotificationVolumeLabel;
@@ -232,10 +236,16 @@ final class QuickSettingsOverlay {
                 com.android.internal.R.string.quick_settings_overlay_no_notifications);
         mNotificationsCaption = context.getResources().getString(
                 com.android.internal.R.string.quick_settings_overlay_notifications);
+        mConfigureQuickSettingsLabel = context.getResources().getString(
+                com.android.internal.R.string.quick_settings_overlay_configure);
         mConfigItemShownLabel = context.getResources().getString(
                 com.android.internal.R.string.quick_settings_overlay_shown);
         mConfigItemHiddenLabel = context.getResources().getString(
                 com.android.internal.R.string.quick_settings_overlay_hidden);
+        mBrightnessLabel = context.getResources().getString(
+                com.android.internal.R.string.quick_settings_overlay_brightness);
+        mAdaptiveBrightnessLabel = context.getResources().getString(
+                com.android.internal.R.string.quick_settings_overlay_adaptive_brightness);
         mCallVolumeLabel = context.getResources().getString(
                 com.android.internal.R.string.quick_settings_overlay_call_volume);
         mMediaVolumeLabel = context.getResources().getString(
@@ -272,12 +282,14 @@ final class QuickSettingsOverlay {
         mRoot.setBackground(makeBackground(0xcc101418, 0, dp(18)));
         mHeader = new FrameLayout(context);
         mRoot.addView(mHeader, new LinearLayout.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT, dp(32)));
+                WindowManager.LayoutParams.MATCH_PARENT, dp(HEADER_HEIGHT_DP)));
 
         mCaption = new TextView(context);
         mCaption.setTextColor(Color.WHITE);
-        mCaption.setTextSize(18);
+        mCaption.setTextSize(16);
         mCaption.setGravity(Gravity.CENTER);
+        mCaption.setMaxLines(2);
+        mCaption.setEllipsize(TextUtils.TruncateAt.END);
         mCaption.setPadding(dp(40), 0, dp(40), 0);
         mHeader.addView(mCaption, new FrameLayout.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
@@ -392,7 +404,7 @@ final class QuickSettingsOverlay {
                 com.android.internal.R.drawable.ic_lock_bugreport);
 
         mBrightnessControl = addBrightnessControl();
-        addQuickSettingsConfigSliderItem(SLIDER_BRIGHTNESS, "Brightness");
+        addQuickSettingsConfigSliderItem(SLIDER_BRIGHTNESS, mBrightnessLabel);
         addVolumeControl(0, mCallVolumeLabel, AudioManager.STREAM_VOICE_CALL, 0xff35a7ff);
         addQuickSettingsConfigSliderItem(SLIDER_CALL_VOLUME, mCallVolumeLabel);
         addVolumeControl(1, mMediaVolumeLabel, AudioManager.STREAM_MUSIC, 0xff30d158);
@@ -790,7 +802,7 @@ final class QuickSettingsOverlay {
                 WindowManager.LayoutParams.MATCH_PARENT, 1f));
 
         TextView autoLabel = new TextView(mContext);
-        autoLabel.setText("auto");
+        autoLabel.setText("Auto");
         autoLabel.setTextColor(Color.WHITE);
         autoLabel.setTextSize(11);
         autoLabel.setGravity(Gravity.CENTER);
@@ -2092,6 +2104,8 @@ final class QuickSettingsOverlay {
     }
 
     private void updateState() {
+        mHeader.setVisibility(mMode == MODE_QUICK_SETTINGS && mShowingQuickSettingsConfig
+                ? View.GONE : View.VISIBLE);
         try {
             if (mPendingTouchscreenEnabled == null) {
                 refreshTouchscreenState();
@@ -2220,7 +2234,6 @@ final class QuickSettingsOverlay {
                 item.row.setBackground(makeBackground(focused ? 0xff2d6cdf : 0xff263038,
                         focused ? 0xffffffff : 0xff4c5963, dp(12)));
             }
-            mCaption.setText("Quick Settings Buttons");
             scrollFocusedItemIntoView();
             return;
         }
@@ -2246,7 +2259,7 @@ final class QuickSettingsOverlay {
                     focused ? 0xffffffff : 0xff4c5963, dp(12)));
         }
         if (mQuickSettingsHeaderFocused) {
-            mCaption.setText("Configure Quick Settings");
+            mCaption.setText(mConfigureQuickSettingsLabel);
         } else if (isBrightnessRowFocused()) {
             mCaption.setText(getBrightnessCaption());
         } else if (isVolumeRowFocused()) {
@@ -2260,7 +2273,8 @@ final class QuickSettingsOverlay {
     private void updateBrightness() {
         boolean autoBrightness = isAutoBrightnessOn();
         mBrightnessControl.bar.setAlpha(autoBrightness ? 0.45f : 1f);
-        mBrightnessControl.autoLabel.setVisibility(autoBrightness ? View.VISIBLE : View.GONE);
+	// Disable the "Auto" label for now
+        // mBrightnessControl.autoLabel.setVisibility(autoBrightness ? View.VISIBLE : View.GONE);
         float fraction = getBrightnessGammaFraction();
         setSliderFill(mBrightnessControl.fill, mBrightnessControl.empty,
                 Float.isNaN(fraction) ? 0f : fraction);
@@ -2931,11 +2945,11 @@ final class QuickSettingsOverlay {
 
     private String getBrightnessCaption() {
         if (isAutoBrightnessOn()) {
-            return "Brightness Auto";
+            return mAdaptiveBrightnessLabel;
         }
         float fraction = getBrightnessGammaFraction();
         int percentage = Float.isNaN(fraction) ? 0 : Math.round(fraction * 100f);
-        return "Brightness " + percentage + "%";
+        return mBrightnessLabel + " " + percentage + "%";
     }
 
     private int getOverlayTopOffset() {
@@ -2944,10 +2958,12 @@ final class QuickSettingsOverlay {
 
     private int getMaxBodyHeight() {
         int screenHeight = mContext.getResources().getDisplayMetrics().heightPixels;
+        int headerHeight = mMode == MODE_QUICK_SETTINGS && mShowingQuickSettingsConfig
+                ? 0 : HEADER_HEIGHT_DP;
         int reservedHeight = getOverlayTopOffset()
                 + mRoot.getPaddingTop()
                 + mRoot.getPaddingBottom()
-                + dp(32 + 20);
+                + dp(headerHeight + 20);
         return Math.max(dp(160), screenHeight - reservedHeight);
     }
 

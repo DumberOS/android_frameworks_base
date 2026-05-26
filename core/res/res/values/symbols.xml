@@ -27,9 +27,12 @@
   <java-symbol type="string" name="global_action_factory_reset_confirm" />
   <java-symbol type="string" name="prox_touch_block_message" />
   <java-symbol type="string" name="quick_settings_overlay_notifications" />
+  <java-symbol type="string" name="quick_settings_overlay_configure" />
   <java-symbol type="string" name="quick_settings_overlay_no_notifications" />
   <java-symbol type="string" name="quick_settings_overlay_shown" />
   <java-symbol type="string" name="quick_settings_overlay_hidden" />
+  <java-symbol type="string" name="quick_settings_overlay_brightness" />
+  <java-symbol type="string" name="quick_settings_overlay_adaptive_brightness" />
   <java-symbol type="string" name="quick_settings_overlay_call_volume" />
   <java-symbol type="string" name="quick_settings_overlay_media_volume" />
   <java-symbol type="string" name="quick_settings_overlay_notification_volume" />

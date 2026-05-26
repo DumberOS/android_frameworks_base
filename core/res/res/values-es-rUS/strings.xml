@@ -2410,9 +2410,12 @@
         <item>Depuración USB</item>
     </string-array>
     <string name="quick_settings_overlay_notifications">Notificaciones</string>
+    <string name="quick_settings_overlay_configure">Configurar ajustes rápidos</string>
     <string name="quick_settings_overlay_no_notifications">Sin notificaciones</string>
     <string name="quick_settings_overlay_shown">Mostrado</string>
     <string name="quick_settings_overlay_hidden">Oculto</string>
+    <string name="quick_settings_overlay_brightness">Brillo</string>
+    <string name="quick_settings_overlay_adaptive_brightness">Brillo automático</string>
     <string name="quick_settings_overlay_call_volume">Volumen de llamadas entrantes</string>
     <string name="quick_settings_overlay_media_volume">Volumen multimedia</string>
     <string name="quick_settings_overlay_notification_volume">Volumen de notificación</string>

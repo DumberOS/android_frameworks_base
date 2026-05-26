@@ -2409,9 +2409,12 @@
         <item>Αποσφαλμάτωση USB</item>
     </string-array>
     <string name="quick_settings_overlay_notifications">Ειδοποιήσεις</string>
+    <string name="quick_settings_overlay_configure">Διαμόρφωση γρήγορων ρυθμίσεων</string>
     <string name="quick_settings_overlay_no_notifications">Καμία ειδοποίηση</string>
     <string name="quick_settings_overlay_shown">Εμφανίζεται</string>
     <string name="quick_settings_overlay_hidden">Κρυφό</string>
+    <string name="quick_settings_overlay_brightness">Φωτεινότητα</string>
+    <string name="quick_settings_overlay_adaptive_brightness">Προσαρμοστική φωτεινότητα</string>
     <string name="quick_settings_overlay_call_volume">Ένταση ήχου κλήσης</string>
     <string name="quick_settings_overlay_media_volume">Ένταση ήχου πολυμέσων</string>
     <string name="quick_settings_overlay_notification_volume">Ένταση ήχου ειδοποίησης</string>

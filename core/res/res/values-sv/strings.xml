@@ -2410,9 +2410,12 @@
     </string-array>
 
     <string name="quick_settings_overlay_notifications">Aviseringar</string>
+    <string name="quick_settings_overlay_configure">Konfigurera snabbinställningar</string>
     <string name="quick_settings_overlay_no_notifications">Inga aviseringar</string>
     <string name="quick_settings_overlay_shown">Visas</string>
     <string name="quick_settings_overlay_hidden">Dold</string>
+    <string name="quick_settings_overlay_brightness">Ljusstyrka</string>
+    <string name="quick_settings_overlay_adaptive_brightness">Anpassad ljusstyrka</string>
     <string name="quick_settings_overlay_call_volume">Samtalsvolym</string>
     <string name="quick_settings_overlay_media_volume">Mediavolym</string>
     <string name="quick_settings_overlay_notification_volume">Aviseringsvolym</string>

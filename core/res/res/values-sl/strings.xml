@@ -2411,9 +2411,12 @@
         <item>Odpravljanje napak USB</item>
     </string-array>
     <string name="quick_settings_overlay_notifications">Obvestila</string>
+    <string name="quick_settings_overlay_configure">Konfiguriraj hitre nastavitve</string>
     <string name="quick_settings_overlay_no_notifications">Ni obvestil</string>
     <string name="quick_settings_overlay_shown">Prikazano</string>
     <string name="quick_settings_overlay_hidden">Skrito</string>
+    <string name="quick_settings_overlay_brightness">Svetlost</string>
+    <string name="quick_settings_overlay_adaptive_brightness">Prilagodljiva svetlost</string>
     <string name="quick_settings_overlay_call_volume">Glasnost dohodnih klicev</string>
     <string name="quick_settings_overlay_media_volume">Glasnost predstavnosti</string>
     <string name="quick_settings_overlay_notification_volume">Glasnost obvestila</string>

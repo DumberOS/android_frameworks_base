@@ -3704,6 +3704,9 @@
     <!-- Caption shown when the notifications list is focused in the quick settings overlay. -->
     <string name="quick_settings_overlay_notifications">Notifications</string>
 
+    <!-- Caption shown when the quick settings configuration button is focused. -->
+    <string name="quick_settings_overlay_configure">Configure Quick Settings</string>
+
     <!-- Empty-state message shown when there are no notifications in the quick settings overlay. -->
     <string name="quick_settings_overlay_no_notifications">No notifications</string>
 
@@ -3712,6 +3715,12 @@
 
     <!-- State text shown for a hidden item in the quick settings overlay configuration screen. -->
     <string name="quick_settings_overlay_hidden">Hidden</string>
+
+    <!-- Label shown for the brightness slider in the quick settings overlay. -->
+    <string name="quick_settings_overlay_brightness">Brightness</string>
+
+    <!-- Caption shown for the brightness slider when adaptive brightness is enabled. -->
+    <string name="quick_settings_overlay_adaptive_brightness">Adaptive brightness</string>
 
     <!-- Label shown for the in-call volume slider in the quick settings overlay. -->
     <string name="quick_settings_overlay_call_volume">Call Volume</string>

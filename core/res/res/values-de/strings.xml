@@ -2409,9 +2409,12 @@
         <item>USB-Debugging</item>
     </string-array>
     <string name="quick_settings_overlay_notifications">Benachrichtigungen</string>
+    <string name="quick_settings_overlay_configure">Schnelleinstellungen konfigurieren</string>
     <string name="quick_settings_overlay_no_notifications">Keine Benachrichtigungen</string>
     <string name="quick_settings_overlay_shown">Angezeigt</string>
     <string name="quick_settings_overlay_hidden">Ausgeblendet</string>
+    <string name="quick_settings_overlay_brightness">Helligkeit</string>
+    <string name="quick_settings_overlay_adaptive_brightness">Automatische Helligkeit</string>
     <string name="quick_settings_overlay_call_volume">Hörerlautstärke</string>
     <string name="quick_settings_overlay_media_volume">Medienlautstärke</string>
     <string name="quick_settings_overlay_notification_volume">Benachrichtigungslautstärke</string>

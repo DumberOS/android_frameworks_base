@@ -2409,9 +2409,12 @@
     <item>USB-fejlfinding</item>
     </string-array>
     <string name="quick_settings_overlay_notifications">Notifikationer</string>
+    <string name="quick_settings_overlay_configure">Konfigurer hurtigindstillinger</string>
     <string name="quick_settings_overlay_no_notifications">Ingen notifikationer</string>
     <string name="quick_settings_overlay_shown">Vist</string>
     <string name="quick_settings_overlay_hidden">Skjult</string>
+    <string name="quick_settings_overlay_brightness">Lysstyrke</string>
+    <string name="quick_settings_overlay_adaptive_brightness">Automatisk lysstyrke</string>
     <string name="quick_settings_overlay_call_volume">Lydstyrke for opkald</string>
     <string name="quick_settings_overlay_media_volume">Lydstyrke for medier</string>
     <string name="quick_settings_overlay_notification_volume">Lydstyrke for notifikationer</string>

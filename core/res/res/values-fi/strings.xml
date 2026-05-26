@@ -2409,9 +2409,12 @@
         <item>USB-virheenkorjaus</item>
     </string-array>
     <string name="quick_settings_overlay_notifications">Ilmoitukset</string>
+    <string name="quick_settings_overlay_configure">Määritä pika-asetukset</string>
     <string name="quick_settings_overlay_no_notifications">Ei ilmoituksia</string>
     <string name="quick_settings_overlay_shown">Näytetty</string>
     <string name="quick_settings_overlay_hidden">Piilotettu</string>
+    <string name="quick_settings_overlay_brightness">Kirkkaus</string>
+    <string name="quick_settings_overlay_adaptive_brightness">Kirkkauden säätö</string>
     <string name="quick_settings_overlay_call_volume">Puhelun äänenvoimakkuus</string>
     <string name="quick_settings_overlay_media_volume">Median äänenvoimakkuus</string>
     <string name="quick_settings_overlay_notification_volume">Ilmoituksen äänenvoimakkuus</string>

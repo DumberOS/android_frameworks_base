@@ -2409,9 +2409,12 @@
         <item>USB-feilsøking</item>
     </string-array>
     <string name="quick_settings_overlay_notifications">Varsler</string>
+    <string name="quick_settings_overlay_configure">Konfigurer hurtiginnstillinger</string>
     <string name="quick_settings_overlay_no_notifications">Ingen varsler</string>
     <string name="quick_settings_overlay_shown">Vist</string>
     <string name="quick_settings_overlay_hidden">Skjult</string>
+    <string name="quick_settings_overlay_brightness">Lysstyrke</string>
+    <string name="quick_settings_overlay_adaptive_brightness">Tilpasset lysstyrke</string>
     <string name="quick_settings_overlay_call_volume">Samtalevolum</string>
     <string name="quick_settings_overlay_media_volume">Medievolum</string>
     <string name="quick_settings_overlay_notification_volume">Varselvolum</string>
