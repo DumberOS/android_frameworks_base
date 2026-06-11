@@ -124,13 +124,13 @@ public class PipTaskOrganizer implements ShellTaskOrganizer.TaskListener,
      */
     private static final int CONTENT_OVERLAY_FADE_OUT_DELAY_MS = 500;
 
-    private static final int CRASH_RECOVERY_CHECK_DELAY_MS = 3000;
-
     private static final int EXTRA_CONTENT_OVERLAY_FADE_OUT_DELAY_MS =
             SystemProperties.getInt(
                     "persist.wm.debug.extra_content_overlay_fade_out_delay_ms", 400);
 
     private static final float PIP_ASPECT_RATIO_MISMATCH_THRESHOLD = 0.005f;
+
+    private static final int CRASH_RECOVERY_CHECK_DELAY_MS = 3000;
 
     private final Context mContext;
     private final SyncTransactionQueue mSyncTransactionQueue;
@@ -427,16 +427,15 @@ public class PipTaskOrganizer implements ShellTaskOrganizer.TaskListener,
             mPipTransitionController.setPipOrganizer(this);
             displayController.addDisplayWindowListener(this);
             pipTransitionController.registerPipTransitionCallback(mPipTransitionCallback);
+            mPipTransitionState.addOnPipTransitionStateChangedListener(
+                    (oldState, newState) -> {
+                        if (mPipTransitionState.isEnteringPip()
+                                && mRemoveStaledPinnedTaskRunnable != null) {
+                            mMainExecutor.removeCallbacks(mRemoveStaledPinnedTaskRunnable);
+                            mRemoveStaledPinnedTaskRunnable = null;
+                        }
+                    });
         }
-
-        mPipTransitionState.addOnPipTransitionStateChangedListener(
-                (oldState, newState) -> {
-                    if (mPipTransitionState.isEnteringPip()
-                            && mRemoveStaledPinnedTaskRunnable != null) {
-                        mMainExecutor.removeCallbacks(mRemoveStaledPinnedTaskRunnable);
-                        mRemoveStaledPinnedTaskRunnable = null;
-                    }
-                });
     }
 
     public PipTransitionController getTransitionController() {
@@ -818,10 +817,12 @@ public class PipTaskOrganizer implements ShellTaskOrganizer.TaskListener,
         }
 
         mRemoveStaledPinnedTaskRunnable = () -> {
+            final ComponentName toRemove = (info != null && info.topActivity != null)
+                    ? info.topActivity : null;
             ProtoLog.w(ShellProtoLogGroup.WM_SHELL_PICTURE_IN_PICTURE,
-                    "SystemUI reboot detected, remove staled PiP task");
+                    "SystemUI reboot detected, remove staled PiP task %s", toRemove);
+            if (toRemove == null) return;
             // Remove the staled Task by matching component name.
-            final ComponentName toRemove = info.topActivity;
             try {
                 List<ActivityManager.RunningTaskInfo> tasks = ActivityTaskManager.getService()
                         .getTasks(10 /* maxNum */,
