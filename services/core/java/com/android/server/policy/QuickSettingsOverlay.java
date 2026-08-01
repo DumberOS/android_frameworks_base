@@ -1493,16 +1493,26 @@ final class QuickSettingsOverlay {
         if (mNotificationItems.isEmpty() || mNotificationDismissInProgress) {
             return;
         }
+        dismissNotification(mNotificationItems.get(mFocusedNotification), right, animate);
+    }
+
+    private void dismissNotification(NotificationItem item, boolean right, boolean animate) {
+        if (item == null || mNotificationDismissInProgress) {
+            return;
+        }
         if (mStatusBarService == null) {
             return;
         }
-        NotificationItem item = mNotificationItems.get(mFocusedNotification);
+        int notificationIndex = mNotificationItems.indexOf(item);
+        if (notificationIndex < 0) {
+            return;
+        }
         StatusBarNotification[] activeNotifications = getActiveNotifications();
         StatusBarNotification summaryToDismiss = getDismissableSummaryFor(item, activeNotifications);
         try {
-            dismissStatusBarNotification(item.sbn, mFocusedNotification, mNotificationItems.size());
+            dismissStatusBarNotification(item.sbn, notificationIndex, mNotificationItems.size());
             if (summaryToDismiss != null) {
-                dismissStatusBarNotification(summaryToDismiss, mFocusedNotification,
+                dismissStatusBarNotification(summaryToDismiss, notificationIndex,
                         mNotificationItems.size());
             }
         } catch (RemoteException | RuntimeException e) {
@@ -1510,23 +1520,22 @@ final class QuickSettingsOverlay {
             return;
         }
         if (animate) {
-            animateFocusedNotificationDismiss(right);
+            animateNotificationDismiss(item, right);
         } else {
-            removeFocusedNotificationFromOverlay(item);
+            removeNotificationFromOverlay(item);
             scheduleNotificationOverlayRefresh();
             updateFocus();
         }
     }
 
-    private void animateFocusedNotificationDismiss(boolean right) {
+    private void animateNotificationDismiss(NotificationItem item, boolean right) {
         mNotificationDismissInProgress = true;
-        NotificationItem item = mNotificationItems.get(mFocusedNotification);
         item.row.animate()
                 .translationX((right ? 1 : -1) * dp(NOTIFICATION_DISMISS_DISTANCE_DP))
                 .alpha(0f)
                 .setDuration(NOTIFICATION_DISMISS_ANIMATION_MS)
                 .withEndAction(() -> {
-                    removeFocusedNotificationFromOverlay(item);
+                    removeNotificationFromOverlay(item);
                     mNotificationDismissInProgress = false;
                     scheduleNotificationOverlayRefresh();
                     updateFocus();
@@ -1534,21 +1543,27 @@ final class QuickSettingsOverlay {
                 .start();
     }
 
-    private void removeFocusedNotificationFromOverlay(NotificationItem item) {
+    private void removeNotificationFromOverlay(NotificationItem item) {
         int removedIndex = mNotificationItems.indexOf(item);
         if (removedIndex < 0) {
             return;
         }
         mNotificationItems.remove(removedIndex);
-        mNotificationsContainer.removeViewAt(removedIndex);
+
+        if (isShowingNotificationList()
+                && item.row.getParent() == mNotificationsContainer) {
+            mNotificationsContainer.removeView(item.row);
+        }
+
         if (!mNotificationItems.isEmpty()) {
             mFocusedNotification = MathUtils.constrain(removedIndex, 0,
                     mNotificationItems.size() - 1);
-            return;
+        } else {
+            if (isShowingNotificationList()) {
+                showNotificationsMessage(mNotificationsEmptyLabel);
+            }
+            mFocusedNotification = 0;
         }
-
-        showNotificationsMessage(mNotificationsEmptyLabel);
-        mFocusedNotification = 0;
     }
 
     private void activateFocusedNotification() {
@@ -1587,7 +1602,7 @@ final class QuickSettingsOverlay {
                     ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED);
             intent.send(mContext, 0, null, null, null, null, options.toBundle());
             if ((sbn.getNotification().flags & Notification.FLAG_AUTO_CANCEL) != 0) {
-                dismissFocusedNotification(true, false);
+                dismissNotification(item, true, false);
             }
             hide();
         } catch (PendingIntent.CanceledException e) {
@@ -1782,6 +1797,10 @@ final class QuickSettingsOverlay {
         mRemoteInput = null;
         mRemoteInputEditor = null;
         mRemoteInputEditText = null;
+    }
+
+    private boolean isShowingNotificationList() {
+        return !mShowingNotificationActionMenu && !mShowingRemoteInputEditor;
     }
 
     private void resetNotificationOverlayState() {
