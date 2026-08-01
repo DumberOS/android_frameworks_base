@@ -2124,6 +2124,14 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
     }
 
     @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (mOnKeyguard && KeyEvent.isConfirmKey(event.getKeyCode())) {
+            return false;
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
+    @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (KeyEvent.isConfirmKey(keyCode)) {
             event.startTracking();
