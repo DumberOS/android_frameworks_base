@@ -1,83 +1,46 @@
 package android.security.keystore2;
 
-import android.content.pm.PackageManager;
-import android.hardware.security.keymint.Algorithm;
-import android.hardware.security.keymint.EcCurve;
-import android.hardware.security.keymint.KeyParameter;
-import android.hardware.security.keymint.KeyParameterValue;
-import android.hardware.security.keymint.Tag;
 import android.security.keystore.KeyProperties;
-import android.system.keystore2.KeyDescriptor;
-import android.util.Pair;
 import android.content.pm.IPackageManager;
 import android.os.ServiceManager;
-import android.content.pm.PackageInfo;
 import android.os.SystemProperties;
-import android.os.RemoteException;
-import androidx.annotation.Nullable;
-import android.system.keystore2.KeyEntryResponse;
-
 
 import android.security.keystore2.shaded.org.bouncycastle.asn1.ASN1Boolean;
 import android.security.keystore2.shaded.org.bouncycastle.asn1.ASN1Encodable;
 import android.security.keystore2.shaded.org.bouncycastle.asn1.ASN1EncodableVector;
 import android.security.keystore2.shaded.org.bouncycastle.asn1.ASN1Enumerated;
-import android.security.keystore2.shaded.org.bouncycastle.asn1.ASN1Integer;
 import android.security.keystore2.shaded.org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import android.security.keystore2.shaded.org.bouncycastle.asn1.ASN1OctetString;
 import android.security.keystore2.shaded.org.bouncycastle.asn1.ASN1Sequence;
 import android.security.keystore2.shaded.org.bouncycastle.asn1.ASN1TaggedObject;
-import android.security.keystore2.shaded.org.bouncycastle.asn1.DERNull;
 import android.security.keystore2.shaded.org.bouncycastle.asn1.DEROctetString;
 import android.security.keystore2.shaded.org.bouncycastle.asn1.DERSequence;
-import android.security.keystore2.shaded.org.bouncycastle.asn1.DERSet;
 import android.security.keystore2.shaded.org.bouncycastle.asn1.DERTaggedObject;
-import android.security.keystore2.shaded.org.bouncycastle.asn1.x500.X500Name;
 import android.security.keystore2.shaded.org.bouncycastle.asn1.x509.Extension;
-import android.security.keystore2.shaded.org.bouncycastle.asn1.x509.KeyUsage;
 import android.security.keystore2.shaded.org.bouncycastle.cert.X509CertificateHolder;
 import android.security.keystore2.shaded.org.bouncycastle.cert.X509v3CertificateBuilder;
 import android.security.keystore2.shaded.org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
-import android.security.keystore2.shaded.org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
-import android.security.keystore2.shaded.org.bouncycastle.jce.provider.BouncyCastleProvider;
 import android.security.keystore2.shaded.org.bouncycastle.openssl.PEMKeyPair;
 import android.security.keystore2.shaded.org.bouncycastle.openssl.PEMParser;
 import android.security.keystore2.shaded.org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
 import android.security.keystore2.shaded.org.bouncycastle.operator.ContentSigner;
 import android.security.keystore2.shaded.org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import android.security.keystore2.shaded.org.bouncycastle.util.io.pem.PemReader;
-import java.util.concurrent.ConcurrentHashMap;
 
 import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.io.StringReader;
-import java.math.BigInteger;
-import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.MessageDigest;
-import java.security.Security;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateFactory;
 import java.security.cert.CertificateParsingException;
 import java.security.cert.X509Certificate;
-import java.security.spec.ECGenParameterSpec;
-import java.security.spec.RSAKeyGenParameterSpec;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Date;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-import javax.security.auth.x500.X500Principal;
-import android.annotation.FlaggedApi;
-
-//@FlaggedApi("")
 @SuppressWarnings("MissingNullability")
 /**
  * @hide
@@ -86,11 +49,7 @@ public final class CertHack {
     private CertHack() {}
     private static final ASN1ObjectIdentifier OID = new ASN1ObjectIdentifier("1.3.6.1.4.1.11129.2.1.17");
     private static final String DISABLE_PROPERTY = "persist.sys.dumbdroid.disable_certhack";
-    private static final Set<String> DISABLED_PACKAGE = Set.of("no.vipps.bankid", "no.dnb.vipps");
-
-    private static final int ATTESTATION_APPLICATION_ID_PACKAGE_INFOS_INDEX = 0;
-    private static final int ATTESTATION_APPLICATION_ID_SIGNATURE_DIGESTS_INDEX = 1;
-    private static final int ATTESTATION_PACKAGE_INFO_PACKAGE_NAME_INDEX = 0;
+    private static final int SECURITY_LEVEL_TRUSTED_ENVIRONMENT = 1;
 
     private static final CertificateFactory certificateFactory;
 
@@ -102,7 +61,6 @@ public final class CertHack {
             throw new RuntimeException(t);
         }
     }
-    private static final int ATTESTATION_PACKAGE_INFO_VERSION_INDEX = 1;
 
     static boolean canHack() {
         return !isHackGloballyDisabled() && !keyboxes.isEmpty();
@@ -121,21 +79,6 @@ public final class CertHack {
             if (isHackGloballyDisabled()) {
                 Logger.i("disabling CertHack globally using property " + DISABLE_PROPERTY);
                 return true;
-            }
-            IPackageManager pm = IPackageManager.Stub.asInterface(ServiceManager.getService("package"));
-            if (pm == null) {
-                Logger.e("isHackDisabledForUid: package manager unavailable");
-                return false;
-            }
-            String[] packages = pm.getPackagesForUid(uid);
-            if (packages == null) {
-                return false;
-            }
-            for (String packageName : packages) {
-                if (DISABLED_PACKAGE.contains(packageName)) {
-                    Logger.i("disabling CertHack for package " + packageName + " uid " + uid);
-                    return true;
-                }
             }
         } catch (Throwable t) {
             Logger.e("isHackDisabledForUid failed", t);
@@ -160,6 +103,14 @@ public final class CertHack {
             throw new CertificateParsingException("Expected DEROctetString");
         }
         return derOctectString.getOctets();
+    }
+
+    private static byte[] getRootOfTrustByteArray(ASN1Sequence rootOfTrust, int index, String label)
+            throws CertificateParsingException {
+        if (rootOfTrust.size() <= index) {
+            throw new CertificateParsingException("Missing " + label + " in root of trust");
+        }
+        return getByteArrayFromAsn1(rootOfTrust.getObjectAt(index));
     }
 
     record KeyBox(PEMKeyPair pemKeyPair, KeyPair keyPair, List<Certificate> certificates) {
@@ -223,17 +174,16 @@ public final class CertHack {
             Extension ext = holder.getExtension(OID);
             ASN1Sequence sequence = ASN1Sequence.getInstance(ext.getExtnValue().getOctets());
             ASN1Encodable[] encodables = sequence.toArray();
-            ASN1Sequence teeEnforced = (ASN1Sequence) encodables[7];
-            ASN1EncodableVector vector = new ASN1EncodableVector();
+            ASN1Sequence teeEnforced = ASN1Sequence.getInstance(encodables[7]);
             ASN1Encodable rootOfTrust = null;
+            ASN1TaggedObject originalRootOfTrustTag = null;
 
             for (ASN1Encodable asn1Encodable : teeEnforced) {
                 ASN1TaggedObject taggedObject = (ASN1TaggedObject) asn1Encodable;
                 if (taggedObject.getTagNo() == 704) {
                     rootOfTrust = taggedObject.getBaseObject().toASN1Primitive();
-                    continue;
+                    originalRootOfTrustTag = taggedObject;
                 }
-                vector.add(taggedObject);
             }
 
             LinkedList<Certificate> certificates;
@@ -251,21 +201,26 @@ public final class CertHack {
                     holder.getNotBefore(),
                     holder.getNotAfter(),
                     holder.getSubject(),
-                    k.pemKeyPair.getPublicKeyInfo()
+                    holder.getSubjectPublicKeyInfo()
             );
             signer = new JcaContentSignerBuilder(leaf.getSigAlgName())
                     .build(k.keyPair.getPrivate());
 
-            byte[] verifiedBootKey = UtilKt.getBootKey();
+            byte[] verifiedBootKey = null;
             byte[] verifiedBootHash = null;
             try {
                 if (!(rootOfTrust instanceof ASN1Sequence r)) {
                     throw new CertificateParsingException("Expected sequence for root of trust, found "
                             + rootOfTrust.getClass().getName());
                 }
-                verifiedBootHash = getByteArrayFromAsn1(r.getObjectAt(3));
+                verifiedBootKey = getRootOfTrustByteArray(r, 0, "verified boot key");
+                verifiedBootHash = getRootOfTrustByteArray(r, 3, "verified boot hash");
             } catch (Throwable t) {
-                Logger.e("failed to get verified boot key or hash from original, use randomly generated instead", t);
+                Logger.e("failed to get verified boot key or hash from original, use generated fallback instead", t);
+            }
+
+            if (verifiedBootKey == null) {
+                verifiedBootKey = UtilKt.getBootKey();
             }
 
             if (verifiedBootHash == null) {
@@ -280,15 +235,35 @@ public final class CertHack {
             };
 
             ASN1Sequence hackedRootOfTrust = new DERSequence(rootOfTrustEnc);
-            ASN1TaggedObject rootOfTrustTagObj = new DERTaggedObject(704, hackedRootOfTrust);
-            vector.add(rootOfTrustTagObj);
+            ASN1TaggedObject rootOfTrustTagObj = new DERTaggedObject(
+                    originalRootOfTrustTag == null || originalRootOfTrustTag.isExplicit(),
+                    704,
+                    hackedRootOfTrust);
+
+            ASN1EncodableVector vector = new ASN1EncodableVector();
+            boolean replacedRootOfTrust = false;
+            for (ASN1Encodable asn1Encodable : teeEnforced) {
+                ASN1TaggedObject taggedObject = (ASN1TaggedObject) asn1Encodable;
+                if (taggedObject.getTagNo() == 704) {
+                    vector.add(rootOfTrustTagObj);
+                    replacedRootOfTrust = true;
+                    continue;
+                }
+                vector.add(taggedObject);
+            }
+            if (!replacedRootOfTrust) {
+                vector.add(rootOfTrustTagObj);
+            }
 
             ASN1Sequence hackEnforced = new DERSequence(vector);
+            // Preserve the real key description but stamp the security levels to TEE.
+            encodables[1] = new ASN1Enumerated(SECURITY_LEVEL_TRUSTED_ENVIRONMENT);
+            encodables[3] = new ASN1Enumerated(SECURITY_LEVEL_TRUSTED_ENVIRONMENT);
             encodables[7] = hackEnforced;
             ASN1Sequence hackedSeq = new DERSequence(encodables);
 
             ASN1OctetString hackedSeqOctets = new DEROctetString(hackedSeq);
-            Extension hackedExt = new Extension(OID, false, hackedSeqOctets);
+            Extension hackedExt = new Extension(OID, ext.isCritical(), hackedSeqOctets);
             builder.addExtension(hackedExt);
 
             for (ASN1ObjectIdentifier extensionOID : holder.getExtensions().getExtensionOIDs()) {
@@ -303,314 +278,6 @@ public final class CertHack {
             Logger.e("Failure: ", t);
         }
         return caList;
-    }
-
-    /**
-     * @hide
-     */
-    public record HackedKey(Integer uid, String alias) {}
-    /**
-     * @hide
-     */
-    public record HackedValue(KeyPair keyPair, KeyEntryResponse response) {}
-
-    /**
-     * @hide
-     */
-    static public ConcurrentHashMap<HackedKey, HackedValue> hackedKeys = new ConcurrentHashMap<>();
-
-    /**
-     * @hide
-     */
-    static public Pair<KeyPair, List<Certificate>> generateKeyPair(int uid, KeyDescriptor descriptor, KeyGenParameters params) {
-        Logger.i("Requested KeyPair with alias: " + descriptor.alias);
-        KeyPair rootKP;
-        X500Name issuer;
-        int size = params.keySize;
-        KeyPair kp = null;
-        KeyBox keyBox = null;
-        try {
-            var algo = params.algorithm;
-            if (algo == Algorithm.EC) {
-                Logger.d("GENERATING EC KEYPAIR OF SIZE " + size);
-                kp = buildECKeyPair(params);
-                keyBox = keyboxes.get(KeyProperties.KEY_ALGORITHM_EC);
-            } else if (algo == Algorithm.RSA) {
-                Logger.d("GENERATING RSA KEYPAIR OF SIZE " + size);
-                kp = buildRSAKeyPair(params);
-                keyBox = keyboxes.get(KeyProperties.KEY_ALGORITHM_RSA);
-            }
-            if (keyBox == null) {
-                Logger.e("UNSUPPORTED ALGORITHM: " + algo);
-                return null;
-            }
-            Logger.i("Have keybox");
-            rootKP = keyBox.keyPair;
-            issuer = new X509CertificateHolder(
-                    keyBox.certificates.get(0).getEncoded()
-            ).getSubject();
-            Logger.i("Have issuer");
-            X509v3CertificateBuilder certBuilder = new JcaX509v3CertificateBuilder(issuer,
-                    params.certificateSerial,
-                    params.certificateNotBefore,
-                    params.certificateNotAfter,
-                    params.certificateSubject,
-                    kp.getPublic()
-            );
-            Logger.i("Have builder");
-
-            KeyUsage keyUsage = new KeyUsage(KeyUsage.keyCertSign);
-            Logger.i("Have usage");
-            certBuilder.addExtension(Extension.keyUsage, true, keyUsage);
-            certBuilder.addExtension(createExtension(params, uid));
-//            Logger.i("Testing " + android.security.keystore2.shaded.org.bouncycastle.operator.jcajce.OperatorHelper.class.getName());
-
-            Logger.i("Have ext");
-            ContentSigner contentSigner;
-            if (algo == Algorithm.EC) {
-                contentSigner = new JcaContentSignerBuilder("SHA256withECDSA").build(rootKP.getPrivate());
-            } else {
-                contentSigner = new JcaContentSignerBuilder("SHA256withRSA").build(rootKP.getPrivate());
-            }
-            Logger.i("Have signer");
-            X509CertificateHolder certHolder = certBuilder.build(contentSigner);
-            var leaf = new JcaX509CertificateConverter().getCertificate(certHolder);
-            Logger.i("Have leaf");
-            List<Certificate> chain = new ArrayList<>(keyBox.certificates);
-            Logger.i("Have chain");
-            chain.add(0, leaf);
-            Logger.d("Successfully generated X500 Cert for alias: " + descriptor.alias);
-            return new Pair<>(kp, chain);
-        } catch (Throwable t) {
-            Logger.e("", t);
-        }
-        return null;
-    }
-
-    private static KeyPair buildECKeyPair(KeyGenParameters params) throws Exception {
-        Security.removeProvider(BouncyCastleProvider.PROVIDER_NAME);
-        Security.addProvider(new BouncyCastleProvider());
-        ECGenParameterSpec spec = new ECGenParameterSpec(params.ecCurveName);
-        KeyPairGenerator kpg = KeyPairGenerator.getInstance("ECDSA", BouncyCastleProvider.PROVIDER_NAME);
-        kpg.initialize(spec);
-        return kpg.generateKeyPair();
-    }
-
-    private static KeyPair buildRSAKeyPair(KeyGenParameters params) throws Exception {
-        Security.removeProvider(BouncyCastleProvider.PROVIDER_NAME);
-        Security.addProvider(new BouncyCastleProvider());
-        RSAKeyGenParameterSpec spec = new RSAKeyGenParameterSpec(
-                params.keySize, params.rsaPublicExponent);
-        KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA", BouncyCastleProvider.PROVIDER_NAME);
-        kpg.initialize(spec);
-        return kpg.generateKeyPair();
-    }
-
-    private static ASN1Encodable[] fromIntList(List<Integer> list) {
-        ASN1Encodable[] result = new ASN1Encodable[list.size()];
-        for (int i = 0; i < list.size(); i++) {
-            result[i] = new ASN1Integer(list.get(i));
-        }
-        return result;
-    }
-
-    private static Extension createExtension(KeyGenParameters params, int uid) {
-        try {
-            byte[] key = UtilKt.getBootKey();
-            byte[] hash = UtilKt.getBootHash();
-
-            ASN1Encodable[] rootOfTrustEncodables = {new DEROctetString(key), ASN1Boolean.TRUE,
-                    new ASN1Enumerated(0), new DEROctetString(hash)};
-
-            ASN1Sequence rootOfTrustSeq = new DERSequence(rootOfTrustEncodables);
-
-            var Apurpose = new DERSet(fromIntList(params.purpose));
-            var Aalgorithm = new ASN1Integer(params.algorithm);
-            var AkeySize = new ASN1Integer(params.keySize);
-            var Adigest = new DERSet(fromIntList(params.digest));
-            var AecCurve = new ASN1Integer(params.ecCurve);
-            var AnoAuthRequired = DERNull.INSTANCE;
-
-            // To be loaded
-            var AosVersion = new ASN1Integer(UtilKt.getOsVersion());
-            var AosPatchLevel = new ASN1Integer(UtilKt.getPatchLevel());
-
-            // TODO hex3l: add applicationID to attestation
-            var AapplicationID = createApplicationId(uid);
-            var AbootPatchlevel = new ASN1Integer(UtilKt.getPatchLevelLong());
-            var AvendorPatchLevel = new ASN1Integer(UtilKt.getPatchLevelLong());
-
-            var AcreationDateTime = new ASN1Integer(System.currentTimeMillis());
-            var Aorigin = new ASN1Integer(0);
-
-            var purpose = new DERTaggedObject(true, 1, Apurpose);
-            var algorithm = new DERTaggedObject(true, 2, Aalgorithm);
-            var keySize = new DERTaggedObject(true, 3, AkeySize);
-            var digest = new DERTaggedObject(true, 5, Adigest);
-            var ecCurve = new DERTaggedObject(true, 10, AecCurve);
-            var noAuthRequired = new DERTaggedObject(true, 503, AnoAuthRequired);
-            var creationDateTime = new DERTaggedObject(true, 701, AcreationDateTime);
-            var origin = new DERTaggedObject(true, 702, Aorigin);
-            var rootOfTrust = new DERTaggedObject(true, 704, rootOfTrustSeq);
-            var osVersion = new DERTaggedObject(true, 705, AosVersion);
-            var osPatchLevel = new DERTaggedObject(true, 706, AosPatchLevel);
-            var applicationID = new DERTaggedObject(true, 709, AapplicationID);
-            var vendorPatchLevel = new DERTaggedObject(true, 718, AvendorPatchLevel);
-            var bootPatchLevel = new DERTaggedObject(true, 719, AbootPatchlevel);
-
-            ASN1Encodable[] teeEnforcedEncodables = {purpose, algorithm, keySize, digest, ecCurve,
-                    noAuthRequired, creationDateTime, origin, rootOfTrust, osVersion, osPatchLevel, applicationID, vendorPatchLevel, bootPatchLevel};
-
-            ASN1OctetString keyDescriptionOctetStr = getAsn1OctetString(teeEnforcedEncodables, params);
-
-            return new Extension(new ASN1ObjectIdentifier("1.3.6.1.4.1.11129.2.1.17"), false, keyDescriptionOctetStr);
-        } catch (Throwable t) {
-            Logger.e("", t);
-        }
-        return null;
-    }
-
-    private static ASN1OctetString getAsn1OctetString(ASN1Encodable[] teeEnforcedEncodables, KeyGenParameters params) throws IOException {
-        ASN1Integer attestationVersion = new ASN1Integer(100);
-        ASN1Enumerated attestationSecurityLevel = new ASN1Enumerated(1);
-        ASN1Integer keymasterVersion = new ASN1Integer(100);
-        ASN1Enumerated keymasterSecurityLevel = new ASN1Enumerated(1);
-        ASN1OctetString attestationChallenge = new DEROctetString(params.attestationChallenge);
-        ASN1OctetString uniqueId = new DEROctetString("".getBytes());
-        ASN1Sequence softwareEnforced = new DERSequence();
-        ASN1Sequence teeEnforced = new DERSequence(teeEnforcedEncodables);
-
-        ASN1Encodable[] keyDescriptionEncodables = {attestationVersion, attestationSecurityLevel, keymasterVersion,
-                keymasterSecurityLevel, attestationChallenge, uniqueId, softwareEnforced, teeEnforced};
-
-        ASN1Sequence keyDescriptionHackSeq = new DERSequence(keyDescriptionEncodables);
-
-        return new DEROctetString(keyDescriptionHackSeq);
-    }
-
-    private static DEROctetString createApplicationId(int uid) throws Throwable {
-	IPackageManager pm = IPackageManager.Stub.asInterface(ServiceManager.getService("package"));	    
-        if (pm == null) {
-            throw new IllegalStateException("createApplicationId: pm not found!");
-        }
-        var packages = pm.getPackagesForUid(uid);
-        var size = packages.length;
-        ASN1Encodable[] packageInfoAA = new ASN1Encodable[size];
-        Set<Digest> signatures = new HashSet<>();
-        var dg = MessageDigest.getInstance("SHA-256");
-        for (int i = 0; i < size; i++) {
-            var name = packages[i];
-            var info = UtilKt.getPackageInfoCompat(pm, name, PackageManager.GET_SIGNATURES, uid / 100000);
-            ASN1Encodable[] arr = new ASN1Encodable[2];
-            arr[ATTESTATION_PACKAGE_INFO_PACKAGE_NAME_INDEX] =
-                    new DEROctetString(packages[i].getBytes(StandardCharsets.UTF_8));
-            arr[ATTESTATION_PACKAGE_INFO_VERSION_INDEX] = new ASN1Integer(info.getLongVersionCode());
-            packageInfoAA[i] = new DERSequence(arr);
-            for (var s : info.signatures) {
-                signatures.add(new Digest(dg.digest(s.toByteArray())));
-            }
-        }
-
-        ASN1Encodable[] signaturesAA = new ASN1Encodable[signatures.size()];
-        var i = 0;
-        for (var d : signatures) {
-            signaturesAA[i] = new DEROctetString(d.digest);
-            i++;
-        }
-
-        ASN1Encodable[] applicationIdAA = new ASN1Encodable[2];
-        applicationIdAA[ATTESTATION_APPLICATION_ID_PACKAGE_INFOS_INDEX] =
-                new DERSet(packageInfoAA);
-        applicationIdAA[ATTESTATION_APPLICATION_ID_SIGNATURE_DIGESTS_INDEX] =
-                new DERSet(signaturesAA);
-
-        return new DEROctetString(new DERSequence(applicationIdAA).getEncoded());
-    }
-
-    record Digest(byte[] digest) {
-        @Override
-        public boolean equals(@Nullable Object o) {
-            if (o instanceof Digest d)
-                return Arrays.equals(digest, d.digest);
-            return false;
-        }
-
-        @Override
-        public int hashCode() {
-            return Arrays.hashCode(digest);
-        }
-    }
-
-    /**
-     * @hide
-     */
-    static public class KeyGenParameters {
-        public int keySize;
-        public int algorithm;
-        public BigInteger certificateSerial;
-        public Date certificateNotBefore;
-        public Date certificateNotAfter;
-        public X500Name certificateSubject;
-
-        public BigInteger rsaPublicExponent;
-        public int ecCurve;
-        public String ecCurveName;
-
-        public List<Integer> purpose = new ArrayList<>();
-        public List<Integer> digest = new ArrayList<>();
-
-        public byte[] attestationChallenge;
-
-        private BigInteger getBigInt(KeyParameterValue v) {
-            if (v.getTag() == KeyParameterValue.longInteger)
-                return BigInteger.valueOf(v.getLongInteger());
-            return new BigInteger(v.getBlob());
-        }
-
-        /**
-         * @hide
-         */
-        public KeyGenParameters(KeyParameter[] params) {
-            for (var kp : params) {
-                var p = kp.value;
-                switch (kp.tag) {
-                    case Tag.KEY_SIZE -> keySize = p.getInteger();
-                    case Tag.ALGORITHM -> algorithm = p.getAlgorithm();
-                    case Tag.CERTIFICATE_SERIAL -> certificateSerial = getBigInt(p);
-                    case Tag.CERTIFICATE_NOT_BEFORE ->
-                            certificateNotBefore = new Date(p.getDateTime());
-                    case Tag.CERTIFICATE_NOT_AFTER ->
-                            certificateNotAfter = new Date(p.getDateTime());
-                    case Tag.CERTIFICATE_SUBJECT ->
-                            certificateSubject = new X500Name(new X500Principal(p.getBlob()).getName());
-                    case Tag.RSA_PUBLIC_EXPONENT -> rsaPublicExponent = getBigInt(p);
-                    case Tag.EC_CURVE -> {
-                        ecCurve = p.getEcCurve();
-                        ecCurveName = getEcCurveName(ecCurve);
-                    }
-                    case Tag.PURPOSE -> {
-                        purpose.add(p.getKeyPurpose());
-                    }
-                    case Tag.DIGEST -> {
-                        digest.add(p.getDigest());
-                    }
-                    case Tag.ATTESTATION_CHALLENGE -> attestationChallenge = p.getBlob();
-                }
-            }
-        }
-
-        private static String getEcCurveName(int curve) {
-            String res;
-            switch (curve) {
-                case EcCurve.CURVE_25519 -> res = "CURVE_25519";
-                case EcCurve.P_224 -> res = "secp224r1";
-                case EcCurve.P_256 -> res = "secp256r1";
-                case EcCurve.P_384 -> res = "secp384r1";
-                case EcCurve.P_521 -> res = "secp521r1";
-                default -> throw new IllegalArgumentException("unknown curve");
-            }
-            return res;
-        }
     }
 
     private static final Map<String, KeyBox> keyboxes = readFromXml("""

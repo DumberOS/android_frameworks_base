@@ -178,26 +178,8 @@ public class AndroidKeyStoreSpi extends KeyStoreSpi {
 
     @Override
     public Certificate[] engineGetCertificateChain(String alias) {
-        int callingUid = android.os.Binder.getCallingUid(); // get the UID of the caller
+        int callingUid = android.os.Binder.getCallingUid();
         boolean canHackForUid = CertHack.canHackForUid(callingUid);
-
-        // First: check if we have a pre-generated / hacked response cached
-        if (canHackForUid) {
-            CertHack.HackedKey hackedKey = new CertHack.HackedKey(callingUid, alias);
-            CertHack.HackedValue hackedValue = CertHack.hackedKeys.get(hackedKey); // adjust access if static vs instance
-            Log.w("Dumbdroid", "Will try using cached chain");
-            if (hackedValue != null && hackedValue.response() != null) {
-                // Directly return the chain from the cached response
-                Certificate[] cachedChain = Utils.getCertificateChain(hackedValue.response());
-                Log.w("Dumbdroid", "Will try using cached chain2");
-                if (cachedChain != null) {
-                    Log.w("Dumbdroid", "Will try using cached chain: SUCCESS");
-                    return cachedChain;
-                }
-                Log.w("Dumbdroid", "Will try using cached chain: FAIL");
-                // fallthrough if something is unexpectedly null
-            }
-        }
         KeyEntryResponse response = getKeyMetadata(alias);
 
         if (response == null || response.metadata.certificate == null) {
@@ -236,6 +218,7 @@ public class AndroidKeyStoreSpi extends KeyStoreSpi {
     @Override
     public Certificate engineGetCertificate(String alias) {
         KeyEntryResponse response = getKeyMetadata(alias);
+        boolean canHackForUid = CertHack.canHackForUid(android.os.Binder.getCallingUid());
 
         if (response == null) {
             return null;
@@ -243,7 +226,11 @@ public class AndroidKeyStoreSpi extends KeyStoreSpi {
 
         byte[] encodedCert = response.metadata.certificate;
         if (encodedCert != null) {
-            return toCertificate(encodedCert);
+            Certificate cert = toCertificate(encodedCert);
+            if (!canHackForUid || cert == null) {
+                return cert;
+            }
+            return CertHack.hackCertificateChain(new Certificate[] {cert})[0];
         }
 
         encodedCert = response.metadata.certificateChain;
