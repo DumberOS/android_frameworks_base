@@ -102,6 +102,8 @@ class DisplayManagerShellCommand extends ShellCommand {
                 return setDockedAndIdle();
             case "undock":
                 return unsetDockedAndIdle();
+            case "pulse-low-level":
+                return pulseLowLevel();
             case "enable-display":
                 return setDisplayEnabled(true);
             case "disable-display":
@@ -173,6 +175,10 @@ class DisplayManagerShellCommand extends ShellCommand {
         pw.println("    Sets brightness to docked + idle screen brightness mode");
         pw.println("  undock");
         pw.println("    Sets brightness to active (normal) screen brightness mode");
+        pw.println("  pulse-low-level [duration_ms] [-d DISPLAY_ID] "
+                + "[-s off|doze|doze_suspend|on_suspend]");
+        pw.println("    Forces a direct display-device pulse without going through");
+        pw.println("    proximity, keyguard, or normal screen-off policy.");
         if (mFlags.isConnectedDisplayManagementEnabled()) {
             pw.println("  enable-display DISPLAY_ID");
             pw.println("    Enable the DISPLAY_ID. Only possible if this is a connected display.");
@@ -569,6 +575,70 @@ class DisplayManagerShellCommand extends ShellCommand {
     private int unsetDockedAndIdle() {
         mService.setDockedAndIdleEnabled(false, Display.DEFAULT_DISPLAY);
         return 0;
+    }
+
+    private int pulseLowLevel() {
+        final PrintWriter pw = getOutPrintWriter();
+        long durationMillis = 80L;
+        int displayId = Display.DEFAULT_DISPLAY;
+        int pulseState = Display.STATE_OFF;
+
+        try {
+            String arg;
+            while ((arg = getNextArg()) != null) {
+                if ("-d".equals(arg)) {
+                    final String idStr = getNextArgRequired();
+                    displayId = Integer.parseInt(idStr);
+                    if (displayId < 0) {
+                        pw.println("Error: Specified displayId (" + idStr
+                                + ") must be a non-negative int.");
+                        return -1;
+                    }
+                } else if ("-s".equals(arg) || "--state".equals(arg)) {
+                    pulseState = parsePulseState(getNextArgRequired(), pw);
+                    if (pulseState == Display.STATE_UNKNOWN) {
+                        return -1;
+                    }
+                } else {
+                    durationMillis = Long.parseLong(arg);
+                    if (durationMillis < 0) {
+                        pw.println("Error: durationMillis must be non-negative.");
+                        return -1;
+                    }
+                }
+            }
+        } catch (RuntimeException ex) {
+            pw.println("Error: " + ex);
+            return -1;
+        }
+
+        try {
+            mService.pulseDisplayDeviceForTest(displayId, pulseState, durationMillis);
+        } catch (RuntimeException ex) {
+            pw.println("Error: " + ex.getMessage());
+            return -1;
+        }
+
+        pw.println("Pulsed display device for display " + displayId + " using state "
+                + Display.stateToString(pulseState) + " for " + durationMillis + "ms");
+        return 0;
+    }
+
+    private int parsePulseState(String stateArg, PrintWriter pw) {
+        switch (stateArg.toLowerCase(Locale.ENGLISH)) {
+            case "off":
+                return Display.STATE_OFF;
+            case "doze":
+                return Display.STATE_DOZE;
+            case "doze_suspend":
+                return Display.STATE_DOZE_SUSPEND;
+            case "on_suspend":
+                return Display.STATE_ON_SUSPEND;
+            default:
+                pw.println("Error: invalid pulse state '" + stateArg + "'. Expected one of: "
+                        + "off, doze, doze_suspend, on_suspend.");
+                return Display.STATE_UNKNOWN;
+        }
     }
 
     private int setDisplayEnabled(boolean enable) {

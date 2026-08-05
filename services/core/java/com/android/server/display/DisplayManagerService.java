@@ -240,8 +240,13 @@ public final class DisplayManagerService extends SystemService {
     private static final String FORCE_WIFI_DISPLAY_ENABLE = "persist.debug.wfd.enable";
 
     private static final String PROP_DEFAULT_DISPLAY_TOP_INSET = "persist.sys.displayinset.top";
+    private static final String PROP_TOUCH_RECOVERY_PULSE_ON_WAKE =
+            "persist.sys.phh.touch_recovery_on_wake";
 
     private static final long WAIT_FOR_DEFAULT_DISPLAY_TIMEOUT = 10000;
+    private static final long TOUCH_RECOVERY_PULSE_DELAY_MS = 700L;
+    private static final long TOUCH_RECOVERY_PULSE_DURATION_MS = 1L;
+    private static final int TOUCH_RECOVERY_PULSE_STATE = Display.STATE_ON_SUSPEND;
     // This value needs to be in sync with the threshold
     // in RefreshRateConfigs::getFrameRateDivisor.
     private static final float THRESHOLD_FOR_REFRESH_RATES_DIVISORS = 0.0009f;
@@ -413,6 +418,10 @@ public final class DisplayManagerService extends SystemService {
     // A map from LogicalDisplay ID to display brightness.
     @GuardedBy("mSyncRoot")
     private final SparseArray<BrightnessPair> mDisplayBrightnesses = new SparseArray<>();
+    @GuardedBy("mSyncRoot")
+    private boolean mTouchRecoveryPulsePending;
+    @GuardedBy("mSyncRoot")
+    private boolean mTouchRecoveryPulseInProgress;
 
     // Set to true when there are pending display changes that have yet to be applied
     // to the surface flinger state.
@@ -918,13 +927,15 @@ public final class DisplayManagerService extends SystemService {
         // Note that we do not need to schedule traversals here although it
         // may happen as a side-effect of displays changing state.
         final Runnable runnable;
+        final boolean shouldScheduleTouchRecoveryPulse;
         final String traceMessage;
         synchronized (mSyncRoot) {
             final int index = mDisplayStates.indexOfKey(displayId);
 
             final BrightnessPair brightnessPair =
                     index < 0 ? null : mDisplayBrightnesses.valueAt(index);
-            if (index < 0 || (mDisplayStates.valueAt(index) == state
+            final int oldState = index < 0 ? Display.STATE_UNKNOWN : mDisplayStates.valueAt(index);
+            if (index < 0 || (oldState == state
                     && brightnessPair.brightness == brightnessState
                     && brightnessPair.sdrBrightness == sdrBrightnessState)) {
                 return; // Display no longer exists or no change.
@@ -949,6 +960,8 @@ public final class DisplayManagerService extends SystemService {
                 // If the display is disabled, any request other than turning it off should fail.
                 return;
             }
+            shouldScheduleTouchRecoveryPulse =
+                    shouldScheduleTouchRecoveryPulseLocked(displayId, oldState, state);
             runnable = updateDisplayStateLocked(display.getPrimaryDisplayDeviceLocked());
             if (Trace.isTagEnabled(Trace.TRACE_TAG_POWER)) {
                 Trace.asyncTraceForTrackEnd(Trace.TRACE_TAG_POWER,
@@ -962,6 +975,137 @@ public final class DisplayManagerService extends SystemService {
         // threads for a long time.
         if (runnable != null) {
             runnable.run();
+        }
+        if (shouldScheduleTouchRecoveryPulse) {
+            scheduleTouchRecoveryPulseOnWake(displayId);
+        }
+    }
+
+    @GuardedBy("mSyncRoot")
+    private boolean shouldScheduleTouchRecoveryPulseLocked(int displayId, int oldState, int state) {
+        if (!SystemProperties.getBoolean(PROP_TOUCH_RECOVERY_PULSE_ON_WAKE, false)) {
+            return false;
+        }
+        if (displayId != Display.DEFAULT_DISPLAY) {
+            return false;
+        }
+        if (!Display.isOffState(oldState) || !Display.isOnState(state)
+                || state == TOUCH_RECOVERY_PULSE_STATE) {
+            return false;
+        }
+        return !mTouchRecoveryPulsePending && !mTouchRecoveryPulseInProgress;
+    }
+
+    private void scheduleTouchRecoveryPulseOnWake(int displayId) {
+        synchronized (mSyncRoot) {
+            if (mTouchRecoveryPulsePending || mTouchRecoveryPulseInProgress) {
+                return;
+            }
+            mTouchRecoveryPulsePending = true;
+        }
+
+        mHandler.postDelayed(() -> {
+            synchronized (mSyncRoot) {
+                if (!mTouchRecoveryPulsePending || mTouchRecoveryPulseInProgress) {
+                    return;
+                }
+                mTouchRecoveryPulsePending = false;
+                mTouchRecoveryPulseInProgress = true;
+            }
+
+            try {
+                pulseDisplayDeviceForTest(
+                        displayId, TOUCH_RECOVERY_PULSE_STATE, TOUCH_RECOVERY_PULSE_DURATION_MS);
+            } catch (RuntimeException e) {
+                Slog.w(TAG, "Touch recovery pulse on wake failed for display " + displayId, e);
+            } finally {
+                synchronized (mSyncRoot) {
+                    mTouchRecoveryPulseInProgress = false;
+                }
+            }
+        }, TOUCH_RECOVERY_PULSE_DELAY_MS);
+    }
+
+    void pulseDisplayDeviceForTest(int displayId, int pulseState, long durationMillis) {
+        final Runnable pulseRunnable;
+        final int restoreState;
+        final float restoreBrightness;
+        final float restoreSdrBrightness;
+        synchronized (mSyncRoot) {
+            final LogicalDisplay display = mLogicalDisplayMapper.getDisplayLocked(displayId);
+            if (display == null) {
+                throw new IllegalArgumentException("Unknown displayId " + displayId);
+            }
+
+            final DisplayDevice device = display.getPrimaryDisplayDeviceLocked();
+            if (device == null) {
+                throw new IllegalStateException("Display " + displayId
+                        + " has no primary display device");
+            }
+
+            final int displayIndex = mDisplayStates.indexOfKey(displayId);
+            if (displayIndex < 0) {
+                throw new IllegalStateException("Display state not initialized for display "
+                        + displayId);
+            }
+
+            restoreState = mDisplayStates.valueAt(displayIndex);
+            if (restoreState == Display.STATE_UNKNOWN || restoreState == Display.STATE_OFF) {
+                throw new IllegalStateException("Display " + displayId
+                        + " must be on before pulsing");
+            }
+            if (pulseState == Display.STATE_UNKNOWN || pulseState == restoreState) {
+                throw new IllegalArgumentException("Invalid pulse state "
+                        + Display.stateToString(pulseState) + " for display " + displayId);
+            }
+
+            final BrightnessPair brightnessPair = mDisplayBrightnesses.get(displayId);
+            if (brightnessPair == null) {
+                throw new IllegalStateException("Display brightness not initialized for display "
+                        + displayId);
+            }
+
+            restoreBrightness = clampBrightness(restoreState, brightnessPair.brightness);
+            restoreSdrBrightness =
+                    clampBrightness(restoreState, brightnessPair.sdrBrightness);
+
+            final float pulseBrightness = pulseState == Display.STATE_OFF
+                    ? PowerManager.BRIGHTNESS_OFF_FLOAT : restoreBrightness;
+            final float pulseSdrBrightness = pulseState == Display.STATE_OFF
+                    ? PowerManager.BRIGHTNESS_OFF_FLOAT : restoreSdrBrightness;
+
+            // Pulse only the real display device and then restore the prior device state.
+            pulseRunnable = device.requestDisplayStateLocked(
+                    pulseState,
+                    pulseBrightness,
+                    pulseSdrBrightness,
+                    display.getDisplayOffloadSessionLocked());
+        }
+
+        if (pulseRunnable != null) {
+            pulseRunnable.run();
+        }
+        SystemClock.sleep(durationMillis);
+        final Runnable onRunnable;
+        synchronized (mSyncRoot) {
+            final LogicalDisplay display = mLogicalDisplayMapper.getDisplayLocked(displayId);
+            if (display == null) {
+                throw new IllegalStateException("Display " + displayId
+                        + " disappeared while pulsing");
+            }
+            final DisplayDevice device = display.getPrimaryDisplayDeviceLocked();
+            if (device == null) {
+                throw new IllegalStateException("Display " + displayId
+                        + " has no primary display device");
+            }
+            onRunnable = device.requestDisplayStateLocked(
+                    restoreState,
+                    restoreBrightness,
+                    restoreSdrBrightness,
+                    display.getDisplayOffloadSessionLocked());
+        }
+        if (onRunnable != null) {
+            onRunnable.run();
         }
     }
 
