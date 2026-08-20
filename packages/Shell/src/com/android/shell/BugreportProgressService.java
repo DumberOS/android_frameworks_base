@@ -39,12 +39,16 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.app.admin.DevicePolicyManager;
 import android.content.ClipData;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
+import android.graphics.drawable.Icon;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Binder;
@@ -67,6 +71,7 @@ import android.os.SystemProperties;
 import android.os.UserHandle;
 import android.os.UserManager;
 import android.os.Vibrator;
+import android.service.chooser.ChooserTarget;
 import android.text.TextUtils;
 import android.text.format.DateUtils;
 import android.util.Log;
@@ -141,6 +146,9 @@ public class BugreportProgressService extends Service {
     private Intent startSelfIntent;
 
     private static final String AUTHORITY = "com.android.shell";
+    private static final String DUMBEROS_BUGREPORT_RECEIVER_PACKAGE =
+            "eu.dumbdroid.bugreportuploader";
+    private static final String DUMBEROS_BUGREPORT_RECEIVER_TITLE = "DumberOS team";
 
     // External intent used to trigger bugreport API.
     static final String INTENT_BUGREPORT_REQUESTED =
@@ -1301,6 +1309,17 @@ public class BugreportProgressService extends Service {
     static void sendShareIntent(Context context, Intent intent) {
         final Intent chooserIntent = Intent.createChooser(intent,
                 context.getResources().getText(R.string.bugreport_intent_chooser_title));
+        final ChooserTarget dumberOsTeamChooserTarget =
+                buildDumberOsTeamChooserTarget(context, intent);
+        if (dumberOsTeamChooserTarget != null) {
+            chooserIntent.putExtra(Intent.EXTRA_CHOOSER_TARGETS,
+                    new ChooserTarget[] { dumberOsTeamChooserTarget });
+        }
+        final Intent dumberOsTeamIntent = buildDumberOsTeamShareIntent(context, intent);
+        if (dumberOsTeamIntent != null) {
+            chooserIntent.putExtra(Intent.EXTRA_INITIAL_INTENTS,
+                    new Intent[] { dumberOsTeamIntent });
+        }
 
         // Since we may be launched behind lockscreen, make sure that ChooserActivity doesn't finish
         // itself in onStop.
@@ -1308,6 +1327,59 @@ public class BugreportProgressService extends Service {
         // Starting the activity from a service.
         chooserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         context.startActivity(chooserIntent);
+    }
+
+    @VisibleForTesting
+    @Nullable
+    static Intent buildDumberOsTeamShareIntent(Context context, Intent sourceIntent) {
+        final ActivityInfo activityInfo = resolveDumberOsTeamActivity(context, sourceIntent);
+        if (activityInfo == null) {
+            return null;
+        }
+
+        final Intent explicitIntent = new Intent(sourceIntent);
+        explicitIntent.setComponent(new ComponentName(activityInfo.packageName, activityInfo.name));
+        return explicitIntent;
+    }
+
+    @VisibleForTesting
+    @Nullable
+    static ChooserTarget buildDumberOsTeamChooserTarget(Context context, Intent sourceIntent) {
+        final ActivityInfo activityInfo = resolveDumberOsTeamActivity(context, sourceIntent);
+        if (activityInfo == null) {
+            return null;
+        }
+
+        return new ChooserTarget(
+                DUMBEROS_BUGREPORT_RECEIVER_TITLE,
+                buildChooserTargetIcon(activityInfo),
+                1.0f,
+                new ComponentName(activityInfo.packageName, activityInfo.name),
+                Bundle.EMPTY);
+    }
+
+    @Nullable
+    private static ActivityInfo resolveDumberOsTeamActivity(Context context, Intent sourceIntent) {
+        final Intent queryIntent = new Intent(sourceIntent);
+        queryIntent.setComponent(null);
+        queryIntent.setPackage(DUMBEROS_BUGREPORT_RECEIVER_PACKAGE);
+
+        final List<ResolveInfo> activities = context.getPackageManager().queryIntentActivities(
+                queryIntent, PackageManager.MATCH_DEFAULT_ONLY);
+        if (activities.isEmpty()) {
+            return null;
+        }
+
+        return activities.get(0).activityInfo;
+    }
+
+    @Nullable
+    private static Icon buildChooserTargetIcon(ActivityInfo activityInfo) {
+        final int iconRes = activityInfo.getIconResource();
+        if (iconRes == 0) {
+            return null;
+        }
+        return Icon.createWithResource(activityInfo.packageName, iconRes);
     }
 
     /**

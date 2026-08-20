@@ -606,12 +606,10 @@ public class GlobalActionsDialogLiteTest extends SysuiTestCase {
     }
 
     @Test
-    public void testBugreportAction_whenDebugMode_shouldOfferBugreportButtonBeforeProvisioning() {
+    public void testBugreportAction_whenUserIsAdmin_shouldOfferBugreportButtonBeforeProvisioning() {
         UserInfo currentUser = mockCurrentUser(FLAG_ADMIN);
 
         when(mGlobalActionsDialogLite.getCurrentUser()).thenReturn(currentUser);
-        mSecureSettings.putIntForUser(Settings.Secure.BUGREPORT_IN_POWER_MENU, 1,
-                currentUser.id);
 
         GlobalActionsDialogLite.BugReportAction bugReportAction =
                 mGlobalActionsDialogLite.makeBugReportActionForTesting();
@@ -623,12 +621,21 @@ public class GlobalActionsDialogLiteTest extends SysuiTestCase {
         UserInfo currentUser = mockCurrentUser(0);
 
         when(mGlobalActionsDialogLite.getCurrentUser()).thenReturn(currentUser);
-        mSecureSettings.putIntForUser(Settings.Secure.BUGREPORT_IN_POWER_MENU, 1,
-                currentUser.id);
 
         GlobalActionsDialogLite.BugReportAction bugReportAction =
                 mGlobalActionsDialogLite.makeBugReportActionForTesting();
         assertThat(bugReportAction.showBeforeProvisioning()).isFalse();
+    }
+
+    @Test
+    public void testShouldDisplayBugReport_whenUserIsAdmin_shouldReturnTrue() {
+        assertThat(mGlobalActionsDialogLite.shouldDisplayBugReport(mockCurrentUser(FLAG_ADMIN)))
+                .isTrue();
+    }
+
+    @Test
+    public void testShouldDisplayBugReport_whenUserIsNotAdmin_shouldReturnFalse() {
+        assertThat(mGlobalActionsDialogLite.shouldDisplayBugReport(mockCurrentUser(0))).isFalse();
     }
 
     @Test

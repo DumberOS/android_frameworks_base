@@ -18,16 +18,24 @@ package com.android.shell;
 import static com.android.shell.BugreportProgressService.findSendToAccount;
 
 import static junit.framework.Assert.assertEquals;
+import static junit.framework.Assert.assertNotNull;
 import static junit.framework.Assert.assertNull;
 
+import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.when;
 
 import android.accounts.Account;
 import android.accounts.AccountManager;
+import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
+import android.content.pm.ActivityInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.os.UserHandle;
 import android.os.UserManager;
+import android.service.chooser.ChooserTarget;
 import android.test.mock.MockContext;
 import android.util.Pair;
 
@@ -60,6 +68,9 @@ public class BugreportProgressServiceTest {
         @Mock
         public AccountManager accountManager;
 
+        @Mock
+        public PackageManager packageManager;
+
         public MyContext() {
             MockitoAnnotations.initMocks(this);
         }
@@ -85,6 +96,11 @@ public class BugreportProgressServiceTest {
                 return Context.ACCOUNT_SERVICE;
             }
             return super.getSystemServiceName(serviceClass);
+        }
+
+        @Override
+        public PackageManager getPackageManager() {
+            return packageManager;
         }
     }
 
@@ -346,5 +362,71 @@ public class BugreportProgressServiceTest {
         checkFindSendToAccount(10, "xyz@android.com", "@android.com");
         checkFindSendToAccount(0, "abc@gmail.com", "gmail.com");
         checkFindSendToAccount(0, "abc@gmail.com", "@gmail.com");
+    }
+
+    @Test
+    public void buildDumberOsTeamShareIntent_whenReceiverInstalled_returnsExplicitIntent() {
+        final ResolveInfo resolveInfo = new ResolveInfo();
+        resolveInfo.activityInfo = new ActivityInfo();
+        resolveInfo.activityInfo.packageName = "eu.dumbdroid.bugreportuploader";
+        resolveInfo.activityInfo.name =
+                "eu.dumbdroid.bugreportuploader.BugreportUploadActivity";
+        resolveInfo.activityInfo.icon = android.R.drawable.ic_menu_upload;
+        when(mTestContext.packageManager.queryIntentActivities(any(Intent.class),
+                eq(PackageManager.MATCH_DEFAULT_ONLY))).thenReturn(list(resolveInfo));
+
+        final Intent sourceIntent = new Intent(Intent.ACTION_SEND_MULTIPLE);
+        sourceIntent.putExtra(Intent.EXTRA_SUBJECT, "bugreport");
+
+        final Intent explicitIntent = BugreportProgressService.buildDumberOsTeamShareIntent(
+                mTestContext, sourceIntent);
+
+        assertNotNull(explicitIntent);
+        assertEquals(Intent.ACTION_SEND_MULTIPLE, explicitIntent.getAction());
+        assertEquals("bugreport", explicitIntent.getStringExtra(Intent.EXTRA_SUBJECT));
+        assertEquals(new ComponentName("eu.dumbdroid.bugreportuploader",
+                "eu.dumbdroid.bugreportuploader.BugreportUploadActivity"),
+                explicitIntent.getComponent());
+    }
+
+    @Test
+    public void buildDumberOsTeamChooserTarget_whenReceiverInstalled_returnsDirectShareTarget() {
+        final ResolveInfo resolveInfo = new ResolveInfo();
+        resolveInfo.activityInfo = new ActivityInfo();
+        resolveInfo.activityInfo.packageName = "eu.dumbdroid.bugreportuploader";
+        resolveInfo.activityInfo.name =
+                "eu.dumbdroid.bugreportuploader.BugreportUploadActivity";
+        resolveInfo.activityInfo.icon = android.R.drawable.ic_menu_upload;
+        when(mTestContext.packageManager.queryIntentActivities(any(Intent.class),
+                eq(PackageManager.MATCH_DEFAULT_ONLY))).thenReturn(list(resolveInfo));
+
+        final ChooserTarget chooserTarget = BugreportProgressService
+                .buildDumberOsTeamChooserTarget(
+                        mTestContext, new Intent(Intent.ACTION_SEND_MULTIPLE));
+
+        assertNotNull(chooserTarget);
+        assertEquals("DumberOS team", chooserTarget.getTitle());
+        assertEquals(1.0f, chooserTarget.getScore(), 0.0f);
+        assertEquals(new ComponentName("eu.dumbdroid.bugreportuploader",
+                "eu.dumbdroid.bugreportuploader.BugreportUploadActivity"),
+                chooserTarget.getComponentName());
+    }
+
+    @Test
+    public void buildDumberOsTeamChooserTarget_whenReceiverMissing_returnsNull() {
+        when(mTestContext.packageManager.queryIntentActivities(any(Intent.class),
+                eq(PackageManager.MATCH_DEFAULT_ONLY))).thenReturn(list());
+
+        assertNull(BugreportProgressService.buildDumberOsTeamChooserTarget(
+                mTestContext, new Intent(Intent.ACTION_SEND_MULTIPLE)));
+    }
+
+    @Test
+    public void buildDumberOsTeamShareIntent_whenReceiverMissing_returnsNull() {
+        when(mTestContext.packageManager.queryIntentActivities(any(Intent.class),
+                eq(PackageManager.MATCH_DEFAULT_ONLY))).thenReturn(list());
+
+        assertNull(BugreportProgressService.buildDumberOsTeamShareIntent(
+                mTestContext, new Intent(Intent.ACTION_SEND_MULTIPLE)));
     }
 }
