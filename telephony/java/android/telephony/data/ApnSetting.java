@@ -557,8 +557,8 @@ public class ApnSetting implements Parcelable {
     private final boolean mCarrierEnabled;
     private final @TelephonyManager.NetworkTypeBitMask int mNetworkTypeBitmask;
     private final @TelephonyManager.NetworkTypeBitMask long mLingeringNetworkTypeBitmask;
-    private final int mProfileId;
-    private final boolean mPersistent;
+    private int mProfileId;
+    private boolean mPersistent;
     private final int mMaxConns;
     private final int mWaitTime;
     private final int mMaxConnsTime;
@@ -611,12 +611,30 @@ public class ApnSetting implements Parcelable {
     }
 
     /**
+     * Sets the modem profile ID for this APN.
+     *
+     * @hide
+     */
+    public void setProfileId(int profileId) {
+        mProfileId = profileId;
+    }
+
+    /**
      * Returns if the APN setting is persistent on the modem.
      *
      * @return {@code true} if the APN setting is persistent on the modem.
      */
     public boolean isPersistent() {
         return mPersistent;
+    }
+
+    /**
+     * Sets whether this APN setting should be persistent on the modem.
+     *
+     * @hide
+     */
+    public void setPersistent(boolean persistent) {
+        mPersistent = persistent;
     }
 
     /**

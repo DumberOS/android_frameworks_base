@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright (C) 2026 The Android Open Source Project -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="18dp"
+    android:height="18dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M19,12c0,-2.93 -2.07,-5 -5,-5v2c1.86,0 3,1.14 3,3zM21,12c0,-5.07 -3.93,-9 -9,-9v2c3.95,0 7,3.05 7,7zM19.95,21c-3.23,0 -6.29,-1.44 -8.65,-3.8 -2.36,-2.36 -3.8,-5.42 -3.8,-8.65 0,-0.45 0.3,-0.75 0.75,-0.75h4.05c0.35,0 0.63,0.23 0.68,0.58l0.65,3.5c0.05,0.35 -0.08,0.63 -0.3,0.85l-1.86,1.88c1.05,1.8 2.63,3.38 4.53,4.53l1.85,-1.85c0.23,-0.23 0.59,-0.34 0.94,-0.29l3.45,0.7c0.35,0.08 0.58,0.34 0.58,0.69v2.36c0,0.45 -0.3,0.75 -0.75,0.75z" />
+</vector>

@@ -25,6 +25,7 @@ import android.os.Parcel;
 import android.os.Parcelable;
 import android.os.PersistableBundle;
 import android.os.SystemClock;
+import android.os.SystemProperties;
 
 import com.android.telephony.Rlog;
 
@@ -81,8 +82,8 @@ public class SignalStrength implements Parcelable {
     CellSignalStrengthGsm mGsm;
     CellSignalStrengthWcdma mWcdma;
     CellSignalStrengthTdscdma mTdscdma;
-    CellSignalStrengthLte mLte;
-    CellSignalStrengthNr mNr;
+    protected CellSignalStrengthLte mLte;
+    protected CellSignalStrengthNr mNr;
 
     /**
      * This constructor is used to create SignalStrength with default
@@ -288,6 +289,22 @@ public class SignalStrength implements Parcelable {
         return 0;
     }
 
+    private static SignalStrength makeSignalStrength(Parcel in) {
+        if ("0".equals(SystemProperties.get(
+                "ro.vendor.mtk_telephony_add_on_policy", "0"))) {
+            try {
+                Class<?> clazz = Class.forName("mediatek.telephony.MtkSignalStrength");
+                java.lang.reflect.Constructor<?> constructor =
+                        clazz.getConstructor(Parcel.class);
+                constructor.setAccessible(true);
+                return (SignalStrength) constructor.newInstance(in);
+            } catch (Exception e) {
+                // Fall through to the platform implementation on non-MTK devices.
+            }
+        }
+        return new SignalStrength(in);
+    }
+
     /**
      * {@link Parcelable.Creator}
      *
@@ -295,7 +312,7 @@ public class SignalStrength implements Parcelable {
     public static final @android.annotation.NonNull Parcelable.Creator<SignalStrength> CREATOR =
             new Parcelable.Creator<>() {
                 public SignalStrength createFromParcel(Parcel in) {
-                    return new SignalStrength(in);
+                    return makeSignalStrength(in);
                 }
 
                 public SignalStrength[] newArray(int size) {

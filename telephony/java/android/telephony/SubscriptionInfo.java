@@ -1061,6 +1061,12 @@ public class SubscriptionInfo implements Parcelable {
         return idToPrint;
     }
 
+    /** Android 13 compatibility alias used by vendor telephony code. @hide */
+    @Nullable
+    public static String givePrintableIccid(@Nullable String iccId) {
+        return getPrintableId(iccId);
+    }
+
     @Override
     public String toString() {
         String iccIdToPrint = getPrintableId(mIccId);

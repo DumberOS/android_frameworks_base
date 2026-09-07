@@ -172,6 +172,7 @@ public class PhoneStatusBarPolicy
     private final PrivacyLogger mPrivacyLogger;
     private final ConnectivityManager mConnectivityManager;
     private final NetworkPolicyManager mNetworkPolicyManager;
+    private final VoWifiStatusBarIconController mVoWifiIconController;
 
     private boolean mZenVisible;
     private boolean mVibrateVisible;
@@ -242,6 +243,8 @@ public class PhoneStatusBarPolicy
         mJavaAdapter = javaAdapter;
         mConnectivityManager = context.getSystemService(ConnectivityManager.class);
         mNetworkPolicyManager = context.getSystemService(NetworkPolicyManager.class);
+        mVoWifiIconController = new VoWifiStatusBarIconController(
+                context, iconController, mainExecutor, mHandler);
 
         mSlotCast = resources.getString(com.android.internal.R.string.status_bar_cast);
         mSlotConnectedDisplay = resources.getString(
@@ -292,6 +295,8 @@ public class PhoneStatusBarPolicy
 
         // listen for user / profile change.
         mUserTracker.addCallback(mUserSwitchListener, mMainExecutor);
+
+        mVoWifiIconController.init();
 
         mNetworkPolicyManager.registerListener(mNetworkPolicyListener);
 

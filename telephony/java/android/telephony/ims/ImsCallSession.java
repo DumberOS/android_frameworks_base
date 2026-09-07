@@ -529,14 +529,63 @@ public class ImsCallSession {
         public void callSessionSendAnbrQuery(int mediaType, int direction, int bitsPerSecond) {
             // no-op
         }
+
+        public void callSessionBusy(ImsCallSession session) {
+            // no-op
+        }
+
+        public void callSessionCalling(ImsCallSession session) {
+            // no-op
+        }
+
+        public void callSessionDeviceSwitchFailed(ImsCallSession session,
+                ImsReasonInfo reasonInfo) {
+            // no-op
+        }
+
+        public void callSessionDeviceSwitched(ImsCallSession session) {
+            // no-op
+        }
+
+        public void callSessionNotificationRingtoneReceived(ImsCallSession session,
+                int eventType, String ringtoneType) {
+            // no-op
+        }
+
+        public void callSessionRedialEcc(ImsCallSession session, boolean isNeedUserConfirm) {
+            // no-op
+        }
+
+        public void callSessionRinging(ImsCallSession session, ImsCallProfile profile) {
+            // no-op
+        }
+
+        public void callSessionRttEventReceived(ImsCallSession session, int event) {
+            // no-op
+        }
+
+        public void callSessionTextCapabilityChanged(ImsCallSession session,
+                int localCapability, int remoteCapability, int localTextStatus,
+                int realRemoteCapability) {
+            // no-op
+        }
+
+        public void callSessionVideoRingtoneEventReceived(ImsCallSession session,
+                int eventType, String ringtoneType) {
+            // no-op
+        }
     }
 
-    private final IImsCallSession miSession;
-    private boolean mClosed = false;
+    protected IImsCallSession miSession;
+    protected boolean mClosed = false;
     private String mCallId = null;
-    private Listener mListener;
+    protected Listener mListener;
     private Executor mListenerExecutor = Runnable::run;
     private IImsCallSessionListenerProxy mIImsCallSessionListenerProxy = null;
+
+    protected ImsCallSession() {
+        miSession = null;
+    }
 
     public ImsCallSession(IImsCallSession iSession) {
         miSession = iSession;
@@ -1265,7 +1314,7 @@ public class ImsCallSession {
      * the application is notified by having one of the methods called on
      * the {@link IImsCallSessionListener}.
      */
-    private class IImsCallSessionListenerProxy extends IImsCallSessionListener.Stub {
+    public class IImsCallSessionListenerProxy extends IImsCallSessionListener.Stub {
         /**
          * Notifies the result of the basic session operation (setup / terminate).
          */

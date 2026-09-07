@@ -135,7 +135,7 @@ public class SmsMessage {
      * @hide
      */
     @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.R, trackingBug = 170729553)
-    private int mSubId = 0;
+    protected int mSubId = 0;
 
     /** set Subscription information
      *
@@ -1047,7 +1047,7 @@ public class SmsMessage {
      * @return true if Cdma format should be used for MO SMS, false otherwise.
      */
     @UnsupportedAppUsage
-    private static boolean useCdmaFormatForMoSms() {
+    protected static boolean useCdmaFormatForMoSms() {
         // IMS is registered with SMS support, check the SMS format supported
         return useCdmaFormatForMoSms(SmsManager.getDefaultSmsSubscriptionId());
     }
@@ -1077,7 +1077,7 @@ public class SmsMessage {
      *
      * @return true if current phone type is cdma, false otherwise.
      */
-    private static boolean isCdmaVoice() {
+    protected static boolean isCdmaVoice() {
         return isCdmaVoice(SmsManager.getDefaultSmsSubscriptionId());
     }
 

@@ -20,6 +20,9 @@
     <!-- Name of the status bar as seen in the applications info settings page. [CHAR LIMIT=12] -->
     <string name="app_label">System UI</string>
 
+    <!-- Content description for the status bar icon shown while calls are available over Wi-Fi. -->
+    <string name="accessibility_status_bar_vowifi">Wi-Fi calling active</string>
+
     <!-- When the battery is low, this is displayed to the user in a dialog.  The title of the low battery alert.  [CHAR LIMIT=NONE]-->
     <string name="battery_low_title">Turn on Battery Saver?</string>
 
