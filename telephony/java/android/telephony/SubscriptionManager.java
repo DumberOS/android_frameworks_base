@@ -2714,6 +2714,15 @@ public class SubscriptionManager {
     }
 
     /**
+     * Returns the phone ID for the default data subscription for vendor compatibility.
+     * @hide
+     */
+    @UnsupportedAppUsage
+    public int getDefaultDataPhoneId() {
+        return getPhoneId(getDefaultDataSubscriptionId());
+    }
+
+    /**
      * Set the subscription which will be used by default for data, with the subscription which
      * the supplied subscription ID corresponds to; or throw a RuntimeException if the supplied
      * subscription ID is not usable (check with {@link #isUsableSubscriptionId(int)}).
