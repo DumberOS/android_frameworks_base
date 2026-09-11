@@ -298,6 +298,9 @@ public class PermissionManagerServiceImpl implements PermissionManagerServiceInt
     private boolean mSystemReady;
 
     @GuardedBy("mLock")
+    private boolean mReconcileSharedUidPermissionsAfterScan;
+
+    @GuardedBy("mLock")
     private PermissionPolicyInternal mPermissionPolicyInternal;
 
     /**
@@ -5015,6 +5018,28 @@ public class PermissionManagerServiceImpl implements PermissionManagerServiceInt
     private void onPackageUninstalledInternal(@NonNull String packageName, int appId,
             @NonNull PackageState packageState, @Nullable AndroidPackage pkg,
             @NonNull List<AndroidPackage> sharedUserPkgs, @UserIdInt int[] userIds) {
+        // A system APK can replace an incompatible /data APK during the boot scan.
+        // getPackages() excludes unparsed shared-UID members, so an empty list here
+        // does not mean the UID is unused. Defer pruning until the scan is complete.
+        if (packageState.hasSharedUser()) {
+            final ArraySet<PackageStateInternal> sharedUserStates =
+                    mPackageManagerInt.getSharedUserPackages(appId);
+            for (int i = 0; i < sharedUserStates.size(); i++) {
+                final PackageStateInternal sharedUserState = sharedUserStates.valueAt(i);
+                if (!packageName.equals(sharedUserState.getPackageName())
+                        && sharedUserState.getAndroidPackage() == null) {
+                    synchronized (mLock) {
+                        if (!mSystemReady) {
+                            mReconcileSharedUidPermissionsAfterScan = true;
+                            Slog.i(TAG, "Deferring shared UID permission cleanup for " + packageName
+                                    + " (appId " + appId + ") until package scan completes");
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
         // TODO: Handle the case when a system app upgrade is uninstalled and need to rejoin
         //  a shared UID permission state.
 
@@ -5174,7 +5199,14 @@ public class PermissionManagerServiceImpl implements PermissionManagerServiceInt
 
     @Override
     public void onStorageVolumeMounted(@Nullable String volumeUuid, boolean fingerprintChanged) {
-        updateAllPermissions(volumeUuid, fingerprintChanged);
+        final boolean reconcileSharedUids;
+        synchronized (mLock) {
+            reconcileSharedUids = mReconcileSharedUidPermissionsAfterScan;
+            mReconcileSharedUidPermissionsAfterScan = false;
+        }
+        // The replace pass prunes permissions no remaining shared-UID member requests,
+        // while retaining the grants and flags for permissions that are still needed.
+        updateAllPermissions(volumeUuid, fingerprintChanged || reconcileSharedUids);
     }
 
     @Override
