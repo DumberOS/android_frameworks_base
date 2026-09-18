@@ -77,6 +77,7 @@ import com.android.internal.statusbar.IStatusBarService;
 import com.android.internal.statusbar.NotificationVisibility;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 
 final class QuickSettingsOverlay {
     private static final String TAG = "QuickSettingsOverlay";
@@ -127,8 +128,9 @@ final class QuickSettingsOverlay {
     private static final int OVERLAY_DISMISS_SWIPE_THRESHOLD_DP = 64;
     private static final String NOTIFICATIONS_LOCKED_MESSAGE =
             "Unlock phone to show notifications";
-    private final Runnable mSyncTouchscreenStateRunnable = this::syncTouchscreenState;
-    private final Runnable mSyncAsyncToggleStatesRunnable = this::syncAsyncToggleStates;
+    private static final long STATE_REFRESH_INTERVAL_MS = 500;
+    private final Runnable mRefreshStateRunnable = this::refreshVisibleState;
+    private CameraManager.TorchCallback mTorchCallback;
 
     private final Context mContext;
     private final WindowManager mWindowManager;
@@ -192,15 +194,9 @@ final class QuickSettingsOverlay {
     private boolean mShowingRemoteInputEditor;
     private boolean mShowingQuickSettingsConfig;
     private boolean mQuickSettingsHeaderFocused;
-    private Boolean mPendingTouchscreenEnabled;
-    private Boolean mPendingWifiHotspotEnabled;
-    private Boolean mPendingWifiEnabled;
-    private Boolean mPendingBluetoothEnabled;
-    private Boolean mPendingUsbTetherEnabled;
     private long mPolicyHandledBackDownTime = -1;
     private boolean mTouchscreenEnabled = true;
     private boolean mFlashlightEnabled;
-    private int mAsyncToggleSyncAttempts;
     private int mFocusedActionMenuItem;
     private NotificationItem mActionMenuSourceItem;
     private NotificationItem mRemoteInputSourceItem;
@@ -464,6 +460,7 @@ final class QuickSettingsOverlay {
             mWindowManager.addView(mRoot, attrs);
             mShowing = true;
             mRoot.requestFocus();
+            startStateMonitoring();
         } catch (RuntimeException e) {
             Slog.w(TAG, "Unable to show quick settings overlay", e);
         }
@@ -473,6 +470,7 @@ final class QuickSettingsOverlay {
         if (!mShowing || mWindowManager == null) {
             return;
         }
+        stopStateMonitoring();
         try {
             mWindowManager.removeView(mRoot);
         } catch (RuntimeException e) {
@@ -620,6 +618,10 @@ final class QuickSettingsOverlay {
             updateState();
         }
         updatePageVisibility();
+        mRoot.removeCallbacks(mRefreshStateRunnable);
+        if (mShowing) {
+            refreshVisibleState();
+        }
         mScrollView.scrollTo(0, 0);
         updateFocus();
     }
@@ -1916,28 +1918,23 @@ final class QuickSettingsOverlay {
             return;
         }
 
-        boolean enabled = getDisplayedWifiHotspotState();
-        mPendingWifiHotspotEnabled = !enabled;
+        boolean enabled = isWifiHotspotOn();
         if (enabled) {
             mConnectivityManager.stopTethering(ConnectivityManager.TETHERING_WIFI);
-            scheduleAsyncToggleStateSync();
         } else {
             mConnectivityManager.startTethering(ConnectivityManager.TETHERING_WIFI,
                     false, new ConnectivityManager.OnStartTetheringCallback() {
                         @Override
                         public void onTetheringStarted() {
-                            mPendingWifiHotspotEnabled = null;
-                            mRoot.post(QuickSettingsOverlay.this::updateState);
+                            mRoot.post(mRefreshStateRunnable);
                         }
 
                         @Override
                         public void onTetheringFailed() {
-                            mPendingWifiHotspotEnabled = null;
-                            mRoot.post(QuickSettingsOverlay.this::updateState);
+                            mRoot.post(mRefreshStateRunnable);
                             Slog.w(TAG, "Unable to start Wi-Fi hotspot");
                         }
                     });
-            scheduleAsyncToggleStateSync();
         }
     }
 
@@ -1951,11 +1948,7 @@ final class QuickSettingsOverlay {
     private void toggleTouchscreen() {
         refreshTouchscreenState();
         boolean enabled = !mTouchscreenEnabled;
-        mPendingTouchscreenEnabled = enabled;
-        mTouchscreenEnabled = enabled;
         setTouchscreenEnabled(enabled);
-        mRoot.removeCallbacks(mSyncTouchscreenStateRunnable);
-        mRoot.postDelayed(mSyncTouchscreenStateRunnable, 150);
     }
 
     private void toggleMobileData() {
@@ -1969,10 +1962,8 @@ final class QuickSettingsOverlay {
         if (mWifiManager == null) {
             return;
         }
-        boolean enabled = getDisplayedWifiState();
-        mPendingWifiEnabled = !enabled;
+        boolean enabled = isWifiOn();
         mWifiManager.setWifiEnabled(!enabled);
-        scheduleAsyncToggleStateSync();
     }
 
     private void toggleBluetooth() {
@@ -1980,42 +1971,36 @@ final class QuickSettingsOverlay {
         if (adapter == null) {
             return;
         }
-        boolean enabled = getDisplayedBluetoothState();
-        mPendingBluetoothEnabled = !enabled;
+        boolean enabled = isBluetoothOn();
         if (enabled) {
             adapter.disable();
         } else {
             adapter.enable();
         }
-        scheduleAsyncToggleStateSync();
     }
 
     private void toggleUsbTethering() {
         if (mConnectivityManager == null) {
             return;
         }
-        boolean enabled = getDisplayedUsbTetheringState();
-        mPendingUsbTetherEnabled = !enabled;
+        boolean enabled = isUsbTetheringOn();
         if (enabled) {
             mConnectivityManager.stopTethering(ConnectivityManager.TETHERING_USB);
-            scheduleAsyncToggleStateSync();
             return;
         }
         mConnectivityManager.startTethering(ConnectivityManager.TETHERING_USB,
                 false, new ConnectivityManager.OnStartTetheringCallback() {
                     @Override
                     public void onTetheringStarted() {
-                        mRoot.post(QuickSettingsOverlay.this::scheduleAsyncToggleStateSync);
+                        mRoot.post(mRefreshStateRunnable);
                     }
 
                     @Override
                     public void onTetheringFailed() {
-                        mPendingUsbTetherEnabled = null;
-                        mRoot.post(QuickSettingsOverlay.this::updateState);
+                        mRoot.post(mRefreshStateRunnable);
                         Slog.w(TAG, "Unable to start USB tethering");
                     }
                 });
-        scheduleAsyncToggleStateSync();
     }
 
     private void toggleUsbDebugging() {
@@ -2038,7 +2023,6 @@ final class QuickSettingsOverlay {
         }
         boolean enabled = !mFlashlightEnabled;
         mCameraManager.setTorchMode(cameraId, enabled);
-        mFlashlightEnabled = enabled;
     }
 
     private void changeFocusedVolume(boolean raise) {
@@ -2123,86 +2107,103 @@ final class QuickSettingsOverlay {
     }
 
     private void updateState() {
+        updateState(true);
+    }
+
+    private void updateState(boolean updateSelection) {
         mHeader.setVisibility(mMode == MODE_QUICK_SETTINGS && mShowingQuickSettingsConfig
                 ? View.GONE : View.VISIBLE);
         try {
-            if (mPendingTouchscreenEnabled == null) {
-                refreshTouchscreenState();
-            } else {
-                mTouchscreenEnabled = mPendingTouchscreenEnabled;
-            }
-            mButtonStates[BUTTON_AIRPLANE].setText(isAirplaneModeOn() ? "ON" : "OFF");
-            mButtonStates[BUTTON_RINGER].setText(getRingerLabel());
-            mButtonStates[BUTTON_DND].setText(isDoNotDisturbOn() ? "ON" : "OFF");
-            mButtonStates[BUTTON_HOTSPOT].setText(
-                    getDisplayedWifiHotspotState() ? "ON" : "OFF");
-            mButtonStates[BUTTON_BATTERY_SAVER].setText(isBatterySaverOn() ? "ON" : "OFF");
-            mButtonStates[BUTTON_TOUCHSCREEN].setText(mTouchscreenEnabled ? "ON" : "OFF");
-            mButtonStates[BUTTON_MOBILE_DATA].setText(isMobileDataOn() ? "ON" : "OFF");
-            mButtonStates[BUTTON_FLASHLIGHT].setText(mFlashlightEnabled ? "ON" : "OFF");
-            mButtonStates[BUTTON_WIFI].setText(getDisplayedWifiState() ? "ON" : "OFF");
-            mButtonStates[BUTTON_BLUETOOTH].setText(
-                    getDisplayedBluetoothState() ? "ON" : "OFF");
-            mButtonStates[BUTTON_USB_TETHER].setText(
-                    getDisplayedUsbTetheringState() ? "ON" : "OFF");
-            mButtonStates[BUTTON_USB_DEBUGGING].setText(isUsbDebuggingOn() ? "ON" : "OFF");
+            refreshTouchscreenState();
+            updateButtonState(BUTTON_AIRPLANE, () -> isAirplaneModeOn() ? "ON" : "OFF");
+            updateButtonState(BUTTON_RINGER, () -> getRingerLabel());
+            updateButtonState(BUTTON_DND, () -> isDoNotDisturbOn() ? "ON" : "OFF");
+            updateButtonState(BUTTON_HOTSPOT, () -> isWifiHotspotOn() ? "ON" : "OFF");
+            updateButtonState(BUTTON_BATTERY_SAVER, () -> isBatterySaverOn() ? "ON" : "OFF");
+            updateButtonState(BUTTON_TOUCHSCREEN, () -> mTouchscreenEnabled ? "ON" : "OFF");
+            updateButtonState(BUTTON_MOBILE_DATA, () -> isMobileDataOn() ? "ON" : "OFF");
+            updateButtonState(BUTTON_FLASHLIGHT, () -> mFlashlightEnabled ? "ON" : "OFF");
+            updateButtonState(BUTTON_WIFI, () -> isWifiOn() ? "ON" : "OFF");
+            updateButtonState(BUTTON_BLUETOOTH, () -> isBluetoothOn() ? "ON" : "OFF");
+            updateButtonState(BUTTON_USB_TETHER, () -> isUsbTetheringOn() ? "ON" : "OFF");
+            updateButtonState(BUTTON_USB_DEBUGGING, () -> isUsbDebuggingOn() ? "ON" : "OFF");
             updateBrightness();
             updateVolumes();
-            applyButtonVisibility();
+            if (updateSelection) {
+                updateFocus();
+            } else if (!mShowingQuickSettingsConfig && !mQuickSettingsHeaderFocused) {
+                // Refresh changing captions without moving focus or scrolling the page.
+                if (isBrightnessRowFocused()) {
+                    mCaption.setText(getBrightnessCaption());
+                } else if (isVolumeRowFocused()) {
+                    mCaption.setText(getFocusedVolumeCaption());
+                }
+            }
         } catch (RuntimeException e) {
             Slog.w(TAG, "Unable to refresh quick settings overlay", e);
         }
-        updateFocus();
     }
 
-    private void syncTouchscreenState() {
-        mPendingTouchscreenEnabled = null;
-        updateState();
+    private void updateButtonState(int index, Supplier<String> readState) {
+        try {
+            String state = readState.get();
+            if (!TextUtils.equals(mButtonStates[index].getText(), state)) {
+                mButtonStates[index].setText(state);
+            }
+        } catch (RuntimeException e) {
+            // A temporarily unavailable service must not prevent other tiles refreshing.
+            mButtonStates[index].setText("N/A");
+            Slog.w(TAG, "Unable to refresh quick setting " + index, e);
+        }
     }
 
-    private void syncAsyncToggleStates() {
-        boolean needsAnotherSync = false;
+    // Query every setting for as long as the page is visible. Radio requests can finish
+    // much later than the click, and other settings (such as airplane mode) can change
+    // them indirectly. Never substitute a requested value for the service's state.
+    private void refreshVisibleState() {
+        mRoot.removeCallbacks(mRefreshStateRunnable);
+        if (!mShowing || mMode != MODE_QUICK_SETTINGS) {
+            return;
+        }
+        updateState(false);
+        mRoot.postDelayed(mRefreshStateRunnable, STATE_REFRESH_INTERVAL_MS);
+    }
 
-        if (mPendingWifiHotspotEnabled != null) {
-            if (mPendingWifiHotspotEnabled == isWifiHotspotOn()) {
-                mPendingWifiHotspotEnabled = null;
-            } else {
-                needsAnotherSync = true;
-            }
-        }
-        if (mPendingWifiEnabled != null) {
-            if (mPendingWifiEnabled == isWifiOn()) {
-                mPendingWifiEnabled = null;
-            } else {
-                needsAnotherSync = true;
-            }
-        }
-        if (mPendingBluetoothEnabled != null) {
-            if (mPendingBluetoothEnabled == isBluetoothOn()) {
-                mPendingBluetoothEnabled = null;
-            } else {
-                needsAnotherSync = true;
-            }
-        }
-        if (mPendingUsbTetherEnabled != null) {
-            if (mPendingUsbTetherEnabled == isUsbTetheringOn()) {
-                mPendingUsbTetherEnabled = null;
-            } else {
-                needsAnotherSync = true;
-            }
-        }
+    private void startStateMonitoring() {
+        if (mCameraManager != null && mTorchCallback == null) {
+            try {
+                getRearFlashCameraId();
+                mTorchCallback = new CameraManager.TorchCallback() {
+                    @Override
+                    public void onTorchModeChanged(String cameraId, boolean enabled) {
+                        // Ignore callbacks queued before this monitoring session ended.
+                        if (mTorchCallback == this && cameraId.equals(mRearFlashCameraId)) {
+                            mFlashlightEnabled = enabled;
+                            refreshVisibleState();
+                        }
+                    }
 
-        if (needsAnotherSync && mAsyncToggleSyncAttempts < 5) {
-            mAsyncToggleSyncAttempts++;
-            mRoot.postDelayed(mSyncAsyncToggleStatesRunnable, 500);
-        } else {
-            mAsyncToggleSyncAttempts = 0;
-            mPendingWifiHotspotEnabled = null;
-            mPendingWifiEnabled = null;
-            mPendingBluetoothEnabled = null;
-            mPendingUsbTetherEnabled = null;
+                    @Override
+                    public void onTorchModeUnavailable(String cameraId) {
+                        onTorchModeChanged(cameraId, false);
+                    }
+                };
+                // Registration delivers the current torch state as well as future changes.
+                mCameraManager.registerTorchCallback(mTorchCallback, mRoot.getHandler());
+            } catch (CameraAccessException | RuntimeException e) {
+                mTorchCallback = null;
+                Slog.w(TAG, "Unable to monitor flashlight state", e);
+            }
         }
-        updateState();
+        refreshVisibleState();
+    }
+
+    private void stopStateMonitoring() {
+        mRoot.removeCallbacks(mRefreshStateRunnable);
+        if (mTorchCallback != null) {
+            mCameraManager.unregisterTorchCallback(mTorchCallback);
+            mTorchCallback = null;
+        }
     }
 
     private void updateFocus() {
@@ -2322,6 +2323,9 @@ final class QuickSettingsOverlay {
                 (LinearLayout.LayoutParams) fill.getLayoutParams();
         LinearLayout.LayoutParams emptyParams =
                 (LinearLayout.LayoutParams) empty.getLayoutParams();
+        if (fillParams.weight == fraction && emptyParams.weight == 1f - fraction) {
+            return;
+        }
         fillParams.weight = fraction;
         emptyParams.weight = 1f - fraction;
         fill.setLayoutParams(fillParams);
@@ -2361,11 +2365,6 @@ final class QuickSettingsOverlay {
                 ? mTetheringManager.getTetherableWifiRegexs() : null);
     }
 
-    private boolean getDisplayedWifiHotspotState() {
-        return mPendingWifiHotspotEnabled != null
-                ? mPendingWifiHotspotEnabled : isWifiHotspotOn();
-    }
-
     private boolean isBatterySaverOn() {
         return mPowerManager != null && mPowerManager.isPowerSaveMode();
     }
@@ -2378,28 +2377,14 @@ final class QuickSettingsOverlay {
         return mWifiManager != null && mWifiManager.isWifiEnabled();
     }
 
-    private boolean getDisplayedWifiState() {
-        return mPendingWifiEnabled != null ? mPendingWifiEnabled : isWifiOn();
-    }
-
     private boolean isBluetoothOn() {
         BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
         return adapter != null && adapter.isEnabled();
     }
 
-    private boolean getDisplayedBluetoothState() {
-        return mPendingBluetoothEnabled != null
-                ? mPendingBluetoothEnabled : isBluetoothOn();
-    }
-
     private boolean isUsbTetheringOn() {
         return isTetheringActive(mTetheringManager != null
                 ? mTetheringManager.getTetherableUsbRegexs() : null);
-    }
-
-    private boolean getDisplayedUsbTetheringState() {
-        return mPendingUsbTetherEnabled != null
-                ? mPendingUsbTetherEnabled : isUsbTetheringOn();
     }
 
     private boolean isUsbDebuggingOn() {
@@ -2420,12 +2405,6 @@ final class QuickSettingsOverlay {
             }
         }
         return false;
-    }
-
-    private void scheduleAsyncToggleStateSync() {
-        mAsyncToggleSyncAttempts = 0;
-        mRoot.removeCallbacks(mSyncAsyncToggleStatesRunnable);
-        mRoot.postDelayed(mSyncAsyncToggleStatesRunnable, 500);
     }
 
     private String getRearFlashCameraId() throws CameraAccessException {
