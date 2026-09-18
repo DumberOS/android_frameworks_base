@@ -20,6 +20,9 @@ import static android.app.Notification.VISIBILITY_PUBLIC;
 import static android.app.Notification.VISIBILITY_SECRET;
 import static android.view.WindowManager.LayoutParams.TYPE_KEYGUARD_DIALOG;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.ValueAnimator;
 import android.app.ActivityManager;
 import android.app.ActivityOptions;
 import android.app.INotificationManager;
@@ -29,12 +32,20 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.RemoteInput;
 import android.bluetooth.BluetoothAdapter;
+import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.graphics.Canvas;
+import android.graphics.ColorFilter;
+import android.graphics.Paint;
 import android.graphics.PixelFormat;
+import android.graphics.Rect;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.LayerDrawable;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
@@ -65,6 +76,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
+import android.view.animation.LinearInterpolator;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
@@ -123,9 +135,14 @@ final class QuickSettingsOverlay {
     private static final int SLIDER_COUNT = VOLUME_COUNT + 1;
     private static final int DEFAULT_VISIBLE_SLIDER_MASK = (1 << SLIDER_COUNT) - 1;
     private static final int NOTIFICATION_DISMISS_ANIMATION_MS = 320;
+    // Expansion time when turning on; total fade-in and contraction time when turning off.
+    private static final int TOGGLE_ANIMATION_DURATION_MS = 300;
+    private static final int TOGGLE_FADE_OUT_DURATION_MS = 1000;
+    // Keep shorter than TOGGLE_ANIMATION_DURATION_MS to leave time for contraction.
+    private static final int TOGGLE_FADE_IN_DURATION_MS = 150;
     private static final int NOTIFICATION_DISMISS_DISTANCE_DP = 120;
     private static final int NOTIFICATION_SWIPE_THRESHOLD_DP = 48;
-    private static final int OVERLAY_DISMISS_SWIPE_THRESHOLD_DP = 64;
+    private static final int NOTIFICATION_TAP_MAX_VERTICAL_MOVEMENT_DP = 64;
     private static final String NOTIFICATIONS_LOCKED_MESSAGE =
             "Unlock phone to show notifications";
     private static final long STATE_REFRESH_INTERVAL_MS = 500;
@@ -151,6 +168,8 @@ final class QuickSettingsOverlay {
     private final LinearLayout mRoot;
     private final FrameLayout mHeader;
     private final TextView mCaption;
+    private final TextView mRunningApps;
+    private final String mSystemUiPackage;
     private final FrameLayout mSettingsButton;
     private final ScrollView mScrollView;
     private final LinearLayout mScrollableContent;
@@ -160,6 +179,10 @@ final class QuickSettingsOverlay {
     private final LinearLayout[] mButtonRows = new LinearLayout[BUTTON_ROW_COUNT];
     private final LinearLayout[] mButtons = new LinearLayout[BUTTON_COUNT];
     private final TextView[] mButtonStates = new TextView[BUTTON_COUNT];
+    private final boolean[] mButtonActive = new boolean[BUTTON_COUNT];
+    private final ValueAnimator[] mToggleAnimators = new ValueAnimator[BUTTON_COUNT];
+    private final ToggleFeedbackDrawable[] mToggleFeedback =
+            new ToggleFeedbackDrawable[BUTTON_COUNT];
     private final String[] mButtonLabels;
     private final String mNotificationsEmptyLabel;
     private final String mNotificationsCaption;
@@ -187,13 +210,14 @@ final class QuickSettingsOverlay {
     private int mFocusedButton;
     private int mFocusedNotification;
     private int mFocusedConfigItem;
-    private float mOverlayTouchDownX;
-    private float mOverlayTouchDownY;
     private boolean mNotificationDismissInProgress;
     private boolean mShowingNotificationActionMenu;
     private boolean mShowingRemoteInputEditor;
     private boolean mShowingQuickSettingsConfig;
     private boolean mQuickSettingsHeaderFocused;
+    private boolean mRunningAppsRequestPending;
+    private int mRunningAppsRequestGeneration;
+    private int mRunningAppsCount = -1;
     private long mPolicyHandledBackDownTime = -1;
     private boolean mTouchscreenEnabled = true;
     private boolean mFlashlightEnabled;
@@ -209,6 +233,8 @@ final class QuickSettingsOverlay {
 
     QuickSettingsOverlay(Context context) {
         mContext = context;
+        mSystemUiPackage = ComponentName.unflattenFromString(context.getString(
+                com.android.internal.R.string.config_systemUIServiceComponent)).getPackageName();
         mWindowManager = context.getSystemService(WindowManager.class);
         mAudioManager = context.getSystemService(AudioManager.class);
         mConnectivityManager = context.getSystemService(ConnectivityManager.class);
@@ -254,14 +280,6 @@ final class QuickSettingsOverlay {
         loadSliderVisibility();
 
         mRoot = new LinearLayout(context) {
-            @Override
-            public boolean dispatchTouchEvent(MotionEvent event) {
-                if (handleOverlaySwipe(event)) {
-                    return true;
-                }
-                return super.dispatchTouchEvent(event);
-            }
-
             @Override
             public boolean dispatchKeyEvent(KeyEvent event) {
                 if (handleRootKeyEvent(event)) {
@@ -399,6 +417,20 @@ final class QuickSettingsOverlay {
         addQuickSettingsConfigItem(BUTTON_USB_DEBUGGING,
                 com.android.internal.R.drawable.ic_lock_bugreport);
 
+        mRunningApps = new TextView(context);
+        mRunningApps.setText(com.android.internal.R.string.quick_settings_overlay_running_apps);
+        mRunningApps.setTextColor(Color.WHITE);
+        mRunningApps.setTextSize(13);
+        mRunningApps.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        mRunningApps.setPadding(dp(12), dp(8), dp(12), dp(8));
+        mRunningApps.setMinHeight(dp(48));
+        mRunningApps.setClickable(true);
+        mRunningApps.setOnClickListener(view -> showRunningApps());
+        LinearLayout.LayoutParams runningAppsParams = new LinearLayout.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT);
+        runningAppsParams.topMargin = dp(8);
+        mQuickSettingsContainer.addView(mRunningApps, runningAppsParams);
+
         mBrightnessControl = addBrightnessControl();
         addQuickSettingsConfigSliderItem(SLIDER_BRIGHTNESS, mBrightnessLabel);
         addVolumeControl(0, mCallVolumeLabel, AudioManager.STREAM_VOICE_CALL, 0xff35a7ff);
@@ -471,6 +503,7 @@ final class QuickSettingsOverlay {
             return;
         }
         stopStateMonitoring();
+        cancelToggleAnimations();
         try {
             mWindowManager.removeView(mRoot);
         } catch (RuntimeException e) {
@@ -571,42 +604,8 @@ final class QuickSettingsOverlay {
         setMode(mMode == MODE_NOTIFICATIONS ? MODE_QUICK_SETTINGS : MODE_NOTIFICATIONS);
     }
 
-    private boolean handleOverlaySwipe(MotionEvent event) {
-        switch (event.getActionMasked()) {
-            case MotionEvent.ACTION_DOWN:
-                mOverlayTouchDownX = event.getX();
-                mOverlayTouchDownY = event.getY();
-                return false;
-            case MotionEvent.ACTION_UP:
-                float deltaX = event.getX() - mOverlayTouchDownX;
-                float deltaY = event.getY() - mOverlayTouchDownY;
-                if (deltaY <= -dp(OVERLAY_DISMISS_SWIPE_THRESHOLD_DP)
-                        && Math.abs(deltaY) > Math.abs(deltaX)) {
-                    if (mMode == MODE_QUICK_SETTINGS) {
-                        if (mShowingQuickSettingsConfig) {
-                            closeQuickSettingsConfig();
-                        } else {
-                            setMode(MODE_NOTIFICATIONS);
-                        }
-                    } else {
-                        hide();
-                    }
-                    return true;
-                }
-                if (mMode == MODE_NOTIFICATIONS
-                        && deltaY >= dp(OVERLAY_DISMISS_SWIPE_THRESHOLD_DP)
-                        && Math.abs(deltaY) > Math.abs(deltaX)) {
-                    setMode(MODE_QUICK_SETTINGS);
-                    return true;
-                }
-                return false;
-            case MotionEvent.ACTION_CANCEL:
-                return false;
-        }
-        return false;
-    }
-
     private void setMode(int mode) {
+        cancelToggleAnimations();
         mMode = mode;
         resetNotificationOverlayState();
         mShowingQuickSettingsConfig = false;
@@ -657,6 +656,7 @@ final class QuickSettingsOverlay {
         state.setTextColor(Color.WHITE);
         state.setTextSize(11);
         state.setGravity(Gravity.CENTER);
+        state.setVisibility(index == BUTTON_RINGER ? View.VISIBLE : View.GONE);
         button.addView(state, new LinearLayout.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT, dp(20)));
 
@@ -964,6 +964,8 @@ final class QuickSettingsOverlay {
             }
         } else if (mQuickSettingsHeaderFocused) {
             showQuickSettingsConfig();
+        } else if (isRunningAppsRowFocused()) {
+            showRunningApps();
         } else if (isBrightnessRowFocused()) {
             toggleAutoBrightness();
         } else {
@@ -1366,7 +1368,7 @@ final class QuickSettingsOverlay {
                             return true;
                         }
                         dismissFocusedNotification(deltaX > 0, true);
-                    } else if (Math.abs(deltaY) < dp(OVERLAY_DISMISS_SWIPE_THRESHOLD_DP)) {
+                    } else if (Math.abs(deltaY) < dp(NOTIFICATION_TAP_MAX_VERTICAL_MOVEMENT_DP)) {
                         if (!focusNotificationItem(item)) {
                             return true;
                         }
@@ -1830,6 +1832,10 @@ final class QuickSettingsOverlay {
     }
 
     private void activateButton(int index) {
+        if (index < 0 || index >= BUTTON_COUNT) {
+            return;
+        }
+        startToggleAnimation(index, !mButtonActive[index]);
         try {
             switch (index) {
                 case BUTTON_AIRPLANE:
@@ -2145,15 +2151,95 @@ final class QuickSettingsOverlay {
     }
 
     private void updateButtonState(int index, Supplier<String> readState) {
+        String state;
         try {
-            String state = readState.get();
-            if (!TextUtils.equals(mButtonStates[index].getText(), state)) {
-                mButtonStates[index].setText(state);
-            }
+            state = readState.get();
         } catch (RuntimeException e) {
             // A temporarily unavailable service must not prevent other tiles refreshing.
-            mButtonStates[index].setText("N/A");
+            state = "N/A";
             Slog.w(TAG, "Unable to refresh quick setting " + index, e);
+        }
+        if (!TextUtils.equals(mButtonStates[index].getText(), state)) {
+            mButtonStates[index].setText(state);
+            boolean active = index != BUTTON_RINGER && "ON".equals(state);
+            boolean activeChanged = mButtonActive[index] != active;
+            mButtonActive[index] = active;
+            mButtons[index].setContentDescription(mButtonLabels[index] + ", " + state);
+            if (activeChanged && active && mToggleAnimators[index] != null) {
+                // Reveal the confirmed ON state immediately; let OFF feedback finish.
+                mToggleAnimators[index].cancel();
+            }
+            updateButtonAppearance(index);
+        }
+    }
+
+    private void updateButtonAppearance(int index) {
+        boolean focused = mMode == MODE_QUICK_SETTINGS && !mShowingQuickSettingsConfig
+                && !mQuickSettingsHeaderFocused && isButtonRowFocused()
+                && index == getFocusedButtonIndex();
+        int fillColor = mButtonActive[index] ? 0xff2d6cdf : 0xff263038;
+        int borderColor = focused ? 0xffffffff : 0xff4c5963;
+        if (mToggleFeedback[index] == null) {
+            mButtons[index].setBackground(makeBackground(fillColor, borderColor, dp(12)));
+        } else {
+            // Keep feedback behind the icon and focus border, including while turning off.
+            mButtons[index].setBackground(new LayerDrawable(new Drawable[] {
+                    makeBackground(fillColor, 0, dp(12)),
+                    mToggleFeedback[index],
+                    makeBackground(Color.TRANSPARENT, borderColor, dp(12))
+            }));
+        }
+    }
+
+    private void startToggleAnimation(int index, boolean turningOn) {
+        if (mToggleAnimators[index] != null) {
+            mToggleAnimators[index].cancel();
+        }
+        ToggleFeedbackDrawable feedback = new ToggleFeedbackDrawable(dp(12));
+        mToggleFeedback[index] = feedback;
+        ValueAnimator animator = ValueAnimator.ofFloat(0f, 1f);
+        mToggleAnimators[index] = animator;
+        int duration = TOGGLE_ANIMATION_DURATION_MS
+                + (turningOn ? TOGGLE_FADE_OUT_DURATION_MS : 0);
+        animator.setDuration(duration);
+        animator.setInterpolator(new LinearInterpolator());
+        animator.addUpdateListener(animation -> {
+            float elapsed = (float) animation.getAnimatedValue() * duration;
+            float size;
+            float opacity;
+            if (turningOn) {
+                size = Math.min(1f, elapsed / TOGGLE_ANIMATION_DURATION_MS);
+                opacity = 1f - Math.max(0f, (elapsed - TOGGLE_ANIMATION_DURATION_MS)
+                        / TOGGLE_FADE_OUT_DURATION_MS);
+            } else {
+                // Briefly reveal the full tile, then contract to its center.
+                opacity = Math.min(1f, elapsed / TOGGLE_FADE_IN_DURATION_MS);
+                size = 1f - Math.max(0f, (elapsed - TOGGLE_FADE_IN_DURATION_MS)
+                        / (TOGGLE_ANIMATION_DURATION_MS - TOGGLE_FADE_IN_DURATION_MS));
+            }
+            // Smooth the expansion/contraction without changing the phase timings.
+            size = size * size * (3f - 2f * size);
+            feedback.setProgress(turningOn ? Math.max(0.04f, size) : size, opacity);
+        });
+        animator.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                if (mToggleAnimators[index] == animation) {
+                    mToggleAnimators[index] = null;
+                    mToggleFeedback[index] = null;
+                    updateButtonAppearance(index);
+                }
+            }
+        });
+        updateButtonAppearance(index);
+        animator.start();
+    }
+
+    private void cancelToggleAnimations() {
+        for (ValueAnimator animator : mToggleAnimators) {
+            if (animator != null) {
+                animator.cancel();
+            }
         }
     }
 
@@ -2166,7 +2252,57 @@ final class QuickSettingsOverlay {
             return;
         }
         updateState(false);
+        requestRunningAppsCount();
         mRoot.postDelayed(mRefreshStateRunnable, STATE_REFRESH_INTERVAL_MS);
+    }
+
+    private void requestRunningAppsCount() {
+        if (mRunningAppsRequestPending) {
+            return;
+        }
+        mRunningAppsRequestPending = true;
+        final int generation = ++mRunningAppsRequestGeneration;
+        Intent intent = new Intent(Intent.ACTION_GET_FOREGROUND_SERVICE_MANAGER_COUNT)
+                .setPackage(mSystemUiPackage).addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
+        try {
+            // SystemUI owns the authoritative list (including profile and visibility filtering).
+            // Query asynchronously so the policy/UI thread never waits for its response.
+            mContext.sendOrderedBroadcastAsUser(intent, UserHandle.SYSTEM, null,
+                    new BroadcastReceiver() {
+                        @Override
+                        public void onReceive(Context context, Intent result) {
+                            if (generation != mRunningAppsRequestGeneration) {
+                                return;
+                            }
+                            mRunningAppsRequestPending = false;
+                            if (!mShowing || mMode != MODE_QUICK_SETTINGS) {
+                                return;
+                            }
+                            int count = getResultCode();
+                            if (count != mRunningAppsCount) {
+                                mRunningAppsCount = count;
+                                mRunningApps.setText(count < 0
+                                        ? mContext.getString(com.android.internal.R.string
+                                                .quick_settings_overlay_running_apps)
+                                        : mContext.getResources().getQuantityString(
+                                                com.android.internal.R.plurals
+                                                        .quick_settings_overlay_running_apps_count,
+                                                count, count));
+                            }
+                        }
+                    }, mRoot.getHandler(), -1, null, null);
+        } catch (RuntimeException e) {
+            mRunningAppsRequestPending = false;
+            Slog.w(TAG, "Unable to query running apps", e);
+        }
+    }
+
+    private void showRunningApps() {
+        // The keyguard-level overlay would cover SystemUI's dialog if left attached.
+        hide();
+        mContext.sendBroadcastAsUser(new Intent(Intent.ACTION_SHOW_FOREGROUND_SERVICE_MANAGER)
+                .setPackage(mSystemUiPackage).addFlags(Intent.FLAG_RECEIVER_FOREGROUND),
+                UserHandle.SYSTEM);
     }
 
     private void startStateMonitoring() {
@@ -2200,6 +2336,10 @@ final class QuickSettingsOverlay {
 
     private void stopStateMonitoring() {
         mRoot.removeCallbacks(mRefreshStateRunnable);
+        ++mRunningAppsRequestGeneration;
+        mRunningAppsRequestPending = false;
+        mRunningAppsCount = -1;
+        mRunningApps.setText(com.android.internal.R.string.quick_settings_overlay_running_apps);
         if (mTorchCallback != null) {
             mCameraManager.unregisterTorchCallback(mTorchCallback);
             mTorchCallback = null;
@@ -2211,7 +2351,7 @@ final class QuickSettingsOverlay {
             mSettingsButton.setVisibility(View.GONE);
             if (mShowingRemoteInputEditor) {
                 if (mRemoteInputEditor != null) {
-                    mRemoteInputEditor.setBackground(makeBackground(0xff2d6cdf,
+                    mRemoteInputEditor.setBackground(makeBackground(0xff263038,
                             0xffffffff, dp(12)));
                 }
                 mCaption.setText(mRemoteInputActionItem != null
@@ -2223,7 +2363,7 @@ final class QuickSettingsOverlay {
                 for (int i = 0; i < mActionMenuItems.size(); i++) {
                     ActionMenuItem item = mActionMenuItems.get(i);
                     boolean focused = i == mFocusedActionMenuItem;
-                    item.row.setBackground(makeBackground(focused ? 0xff2d6cdf : 0xff263038,
+                    item.row.setBackground(makeBackground(0xff263038,
                             focused ? 0xffffffff : 0xff4c5963, dp(12)));
                 }
                 mCaption.setText(mActionMenuSourceItem != null
@@ -2238,7 +2378,7 @@ final class QuickSettingsOverlay {
             for (int i = 0; i < mNotificationItems.size(); i++) {
                 NotificationItem item = mNotificationItems.get(i);
                 boolean focused = i == mFocusedNotification;
-                item.row.setBackground(makeBackground(focused ? 0xff2d6cdf : 0xff263038,
+                item.row.setBackground(makeBackground(0xff263038,
                         focused ? 0xffffffff : 0xff4c5963, dp(12)));
             }
             mCaption.setText(mNotificationsCaption);
@@ -2251,7 +2391,7 @@ final class QuickSettingsOverlay {
             for (int i = 0; i < mConfigItems.size(); i++) {
                 ConfigItem item = mConfigItems.get(i);
                 boolean focused = i == mFocusedConfigItem;
-                item.row.setBackground(makeBackground(focused ? 0xff2d6cdf : 0xff263038,
+                item.row.setBackground(makeBackground(0xff263038,
                         focused ? 0xffffffff : 0xff4c5963, dp(12)));
             }
             scrollFocusedItemIntoView();
@@ -2259,27 +2399,29 @@ final class QuickSettingsOverlay {
         }
 
         mSettingsButton.setBackground(makeBackground(
-                mQuickSettingsHeaderFocused ? 0xff2d6cdf : 0xff263038,
+                0xff263038,
                 mQuickSettingsHeaderFocused ? 0xffffffff : 0xff4c5963, dp(12)));
         for (int i = 0; i < mButtons.length; i++) {
-            boolean focused = !mQuickSettingsHeaderFocused && isButtonRowFocused()
-                    && i == getFocusedButtonIndex();
-            mButtons[i].setBackground(makeBackground(focused ? 0xff2d6cdf : 0xff263038,
-                    focused ? 0xffffffff : 0xff4c5963, dp(12)));
+            updateButtonAppearance(i);
         }
+        boolean runningAppsFocused = !mQuickSettingsHeaderFocused && isRunningAppsRowFocused();
+        mRunningApps.setBackground(makeBackground(0xff263038,
+                runningAppsFocused ? 0xffffffff : 0xff4c5963, dp(12)));
         boolean brightnessFocused = !mQuickSettingsHeaderFocused && isBrightnessRowFocused();
         mBrightnessControl.row.setBackground(makeBackground(
-                brightnessFocused ? 0xff2d6cdf : 0xff263038,
+                0xff263038,
                 brightnessFocused ? 0xffffffff : 0xff4c5963, dp(12)));
         for (int i = 0; i < mVolumeControls.length; i++) {
             VolumeControl control = mVolumeControls[i];
             boolean focused = !mQuickSettingsHeaderFocused
                     && getVolumeControlIndexForRow(mFocusedRow) == i;
-            control.row.setBackground(makeBackground(focused ? 0xff2d6cdf : 0xff263038,
+            control.row.setBackground(makeBackground(0xff263038,
                     focused ? 0xffffffff : 0xff4c5963, dp(12)));
         }
         if (mQuickSettingsHeaderFocused) {
             mCaption.setText(mConfigureQuickSettingsLabel);
+        } else if (isRunningAppsRowFocused()) {
+            mCaption.setText(com.android.internal.R.string.quick_settings_overlay_running_apps);
         } else if (isBrightnessRowFocused()) {
             mCaption.setText(getBrightnessCaption());
         } else if (isVolumeRowFocused()) {
@@ -2488,6 +2630,10 @@ final class QuickSettingsOverlay {
 
     private boolean isBrightnessRowFocused() {
         return getBrightnessRowIndex() >= 0 && mFocusedRow == getBrightnessRowIndex();
+    }
+
+    private boolean isRunningAppsRowFocused() {
+        return mFocusedRow == getVisibleButtonRowCount();
     }
 
     private boolean isVolumeRowFocused() {
@@ -2732,7 +2878,8 @@ final class QuickSettingsOverlay {
         if (row < getVisibleButtonRowCount()) {
             return rowHasVisibleButtons(row);
         }
-        return row == getBrightnessRowIndex() || getVolumeControlIndexForRow(row) >= 0;
+        return row == getVisibleButtonRowCount() || row == getBrightnessRowIndex()
+                || getVolumeControlIndexForRow(row) >= 0;
     }
 
     private boolean rowHasVisibleButtons(int row) {
@@ -2795,11 +2942,11 @@ final class QuickSettingsOverlay {
     }
 
     private int getBrightnessRowIndex() {
-        return mSliderVisibility[SLIDER_BRIGHTNESS] ? getVisibleButtonRowCount() : -1;
+        return mSliderVisibility[SLIDER_BRIGHTNESS] ? getVisibleButtonRowCount() + 1 : -1;
     }
 
     private int getFirstVolumeRowIndex() {
-        return getVisibleButtonRowCount() + (mSliderVisibility[SLIDER_BRIGHTNESS] ? 1 : 0);
+        return getVisibleButtonRowCount() + 1 + (mSliderVisibility[SLIDER_BRIGHTNESS] ? 1 : 0);
     }
 
     private int getLastRowIndex() {
@@ -2807,7 +2954,7 @@ final class QuickSettingsOverlay {
     }
 
     private int getQuickSettingsContentRowCount() {
-        return getVisibleButtonRowCount() + getVisibleSliderRowCount();
+        return getVisibleButtonRowCount() + 1 + getVisibleSliderRowCount();
     }
 
     private int getVisibleSliderRowCount() {
@@ -3008,6 +3155,9 @@ final class QuickSettingsOverlay {
         if (mQuickSettingsHeaderFocused) {
             return mSettingsButton;
         }
+        if (isRunningAppsRowFocused()) {
+            return mRunningApps;
+        }
         if (isBrightnessRowFocused()) {
             return mBrightnessControl.row;
         }
@@ -3069,6 +3219,52 @@ final class QuickSettingsOverlay {
             drawable.setStroke(dp(2), strokeColor);
         }
         return drawable;
+    }
+
+    private static final class ToggleFeedbackDrawable extends Drawable {
+        private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final float mCornerRadius;
+        private float mSize;
+
+        ToggleFeedbackDrawable(float cornerRadius) {
+            mCornerRadius = cornerRadius;
+            mPaint.setColor(0xffb0b0b0);
+        }
+
+        void setProgress(float size, float opacity) {
+            mSize = size;
+            mPaint.setAlpha(Math.round(110f * opacity));
+            invalidateSelf();
+        }
+
+        @Override
+        public void draw(Canvas canvas) {
+            Rect bounds = getBounds();
+            float halfWidth = bounds.width() * mSize / 2f;
+            float halfHeight = bounds.height() * mSize / 2f;
+            float radius = mCornerRadius * mSize;
+            canvas.drawRoundRect(bounds.exactCenterX() - halfWidth,
+                    bounds.exactCenterY() - halfHeight,
+                    bounds.exactCenterX() + halfWidth,
+                    bounds.exactCenterY() + halfHeight, radius, radius, mPaint);
+        }
+
+        @Override
+        public void setAlpha(int alpha) {
+            mPaint.setAlpha(alpha);
+            invalidateSelf();
+        }
+
+        @Override
+        public void setColorFilter(ColorFilter colorFilter) {
+            mPaint.setColorFilter(colorFilter);
+            invalidateSelf();
+        }
+
+        @Override
+        public int getOpacity() {
+            return PixelFormat.TRANSLUCENT;
+        }
     }
 
     private static final class VolumeControl {

@@ -298,6 +298,21 @@ class FgsManagerControllerImpl @Inject constructor(
                 flags = Context.RECEIVER_NOT_EXPORTED
             )
 
+            // Ordered results cannot be returned through BroadcastDispatcher's fan-out.
+            // Keep the overlay's count consistent with this controller's profile/filter rules.
+            context.registerReceiver(
+                object : BroadcastReceiver() {
+                    override fun onReceive(context: Context, intent: Intent) {
+                        if (intent.action == Intent.ACTION_GET_FOREGROUND_SERVICE_MANAGER_COUNT &&
+                            isOrderedBroadcast) {
+                            resultCode = numRunningPackages
+                        }
+                    }
+                },
+                IntentFilter(Intent.ACTION_GET_FOREGROUND_SERVICE_MANAGER_COUNT),
+                Context.RECEIVER_NOT_EXPORTED
+            )
+
             initialized = true
         }
     }

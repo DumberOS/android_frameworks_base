@@ -37,6 +37,7 @@ import android.app.job.UserVisibleJobSummary;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.content.pm.UserInfo;
 import android.os.Binder;
@@ -108,6 +109,7 @@ public class FgsManagerControllerTest extends SysuiTestCase {
     private IUserVisibleJobObserver mIUserVisibleJobObserver;
     private UserTracker.Callback mUserTrackerCallback;
     private BroadcastReceiver mShowFgsManagerReceiver;
+    private BroadcastReceiver mCountReceiver;
     private InOrder mJobSchedulerInOrder;
 
     private List<UserInfo> mUserProfiles;
@@ -446,7 +448,49 @@ public class FgsManagerControllerTest extends SysuiTestCase {
                 .getBackgroundRestrictionExemptionReason(uid);
     }
 
+    @Test
+    public void testOverlayCountTracksServicesAndCurrentProfiles() throws RemoteException {
+        setUserProfiles(0, 10);
+        Assert.assertEquals(0, requestOverlayCount());
+        Binder personal = new Binder();
+        Binder work = new Binder();
+        mIForegroundServiceObserver.onForegroundStateChanged(personal, "personal", 0, true);
+        mIForegroundServiceObserver.onForegroundStateChanged(work, "work", 10, true);
+        mIForegroundServiceObserver.onForegroundStateChanged(new Binder(), "other", 11, true);
+        Assert.assertEquals(2, requestOverlayCount());
+        mIForegroundServiceObserver.onForegroundStateChanged(personal, "personal", 0, false);
+        Assert.assertEquals(1, requestOverlayCount());
+        setUserProfiles(0);
+        Assert.assertEquals(0, requestOverlayCount());
+    }
+
+    @Test
+    public void testOverlayCountIncludesJobsWithoutDoubleCountingPackages() throws RemoteException {
+        setUserProfiles(0);
+        setShowUserVisibleJobs(true);
+        Binder service = new Binder();
+        UserVisibleJobSummary job = new UserVisibleJobSummary(0, "pkg", 0, "pkg", null, 0);
+        mIForegroundServiceObserver.onForegroundStateChanged(service, "pkg", 0, true);
+        mIUserVisibleJobObserver.onUserVisibleJobStateChanged(job, true);
+        Assert.assertEquals(1, requestOverlayCount());
+        mIForegroundServiceObserver.onForegroundStateChanged(service, "pkg", 0, false);
+        Assert.assertEquals(1, requestOverlayCount());
+        mIUserVisibleJobObserver.onUserVisibleJobStateChanged(job, false);
+        Assert.assertEquals(0, requestOverlayCount());
+    }
+
+    private int requestOverlayCount() {
+        mCountReceiver.setPendingResult(new BroadcastReceiver.PendingResult(-1, null, null,
+                BroadcastReceiver.PendingResult.TYPE_REGISTERED, true, false, null, 0, 0));
+        mCountReceiver.onReceive(mContext,
+                new Intent(Intent.ACTION_GET_FOREGROUND_SERVICE_MANAGER_COUNT));
+        return mCountReceiver.getResultCode();
+    }
+
     FgsManagerController createFgsManagerController() throws RemoteException {
+        Context receiverContext = Mockito.spy(mContext);
+        Mockito.doReturn(null).when(receiverContext).registerReceiver(
+                any(BroadcastReceiver.class), any(IntentFilter.class), anyInt());
         ArgumentCaptor<IForegroundServiceObserver> iForegroundServiceObserverArgumentCaptor =
                 ArgumentCaptor.forClass(IForegroundServiceObserver.class);
         ArgumentCaptor<UserTracker.Callback> userTrackerCallbackArgumentCaptor =
@@ -455,7 +499,7 @@ public class FgsManagerControllerTest extends SysuiTestCase {
                 ArgumentCaptor.forClass(BroadcastReceiver.class);
 
         FgsManagerController result = new FgsManagerControllerImpl(
-                mContext,
+                receiverContext,
                 mMainExecutor,
                 mBackgroundExecutor,
                 mSystemClock,
@@ -470,6 +514,14 @@ public class FgsManagerControllerTest extends SysuiTestCase {
                 mSystemUIDialogFactory
         );
         result.init();
+
+        ArgumentCaptor<BroadcastReceiver> countReceiverCaptor =
+                ArgumentCaptor.forClass(BroadcastReceiver.class);
+        verify(receiverContext).registerReceiver(countReceiverCaptor.capture(),
+                argThat(filter -> filter.matchAction(
+                        Intent.ACTION_GET_FOREGROUND_SERVICE_MANAGER_COUNT)),
+                eq(Context.RECEIVER_NOT_EXPORTED));
+        mCountReceiver = countReceiverCaptor.getValue();
 
         verify(mIActivityManager).registerForegroundServiceObserver(
                 iForegroundServiceObserverArgumentCaptor.capture()

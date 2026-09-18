@@ -27,6 +27,8 @@
   <java-symbol type="string" name="global_action_factory_reset_confirm" />
   <java-symbol type="string" name="prox_touch_block_message" />
   <java-symbol type="string" name="quick_settings_overlay_notifications" />
+  <java-symbol type="string" name="quick_settings_overlay_running_apps" />
+  <java-symbol type="plurals" name="quick_settings_overlay_running_apps_count" />
   <java-symbol type="string" name="quick_settings_overlay_configure" />
   <java-symbol type="string" name="quick_settings_overlay_no_notifications" />
   <java-symbol type="string" name="quick_settings_overlay_shown" />

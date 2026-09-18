@@ -3704,6 +3704,14 @@
     <!-- Caption shown when the notifications list is focused in the quick settings overlay. -->
     <string name="quick_settings_overlay_notifications">Notifications</string>
 
+    <!-- Entry point for the system dialog listing active background apps. -->
+    <string name="quick_settings_overlay_running_apps">Apps running in the background</string>
+    <!-- Number of active apps shown between quick settings toggles and sliders. -->
+    <plurals name="quick_settings_overlay_running_apps_count">
+        <item quantity="one">%d app is running in the background</item>
+        <item quantity="other">%d apps are running in the background</item>
+    </plurals>
+
     <!-- Caption shown when the quick settings configuration button is focused. -->
     <string name="quick_settings_overlay_configure">Configure Quick Settings</string>
 

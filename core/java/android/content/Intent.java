@@ -5384,6 +5384,16 @@ public class Intent implements Parcelable, Cloneable {
             "android.intent.action.SHOW_FOREGROUND_SERVICE_MANAGER";
 
     /**
+     * Ordered broadcast to SystemUI requesting the foreground service manager's visible app count.
+     * The receiver returns a nonnegative count as the result code. Senders should use -1 as the
+     * initial result code to distinguish an unavailable manager from an empty list.
+     * Only the system may send this broadcast.
+     * @hide
+     */
+    public static final String ACTION_GET_FOREGROUND_SERVICE_MANAGER_COUNT =
+            "android.intent.action.GET_FOREGROUND_SERVICE_MANAGER_COUNT";
+
+    /**
      * Broadcast Action: Sent to the responsible installer of an archived package when unarchival
      * is requested.
      *
