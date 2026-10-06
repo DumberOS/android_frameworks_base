@@ -418,6 +418,7 @@ final class QuickSettingsOverlay {
                 com.android.internal.R.drawable.ic_lock_bugreport);
 
         mRunningApps = new TextView(context);
+        mRunningApps.setVisibility(View.GONE);
         mRunningApps.setText(com.android.internal.R.string.quick_settings_overlay_running_apps);
         mRunningApps.setTextColor(Color.WHITE);
         mRunningApps.setTextSize(13);
@@ -2278,17 +2279,7 @@ final class QuickSettingsOverlay {
                             if (!mShowing || mMode != MODE_QUICK_SETTINGS) {
                                 return;
                             }
-                            int count = getResultCode();
-                            if (count != mRunningAppsCount) {
-                                mRunningAppsCount = count;
-                                mRunningApps.setText(count < 0
-                                        ? mContext.getString(com.android.internal.R.string
-                                                .quick_settings_overlay_running_apps)
-                                        : mContext.getResources().getQuantityString(
-                                                com.android.internal.R.plurals
-                                                        .quick_settings_overlay_running_apps_count,
-                                                count, count));
-                            }
+                            updateRunningAppsCount(getResultCode());
                         }
                     }, mRoot.getHandler(), -1, null, null);
         } catch (RuntimeException e) {
@@ -2303,6 +2294,34 @@ final class QuickSettingsOverlay {
         mContext.sendBroadcastAsUser(new Intent(Intent.ACTION_SHOW_FOREGROUND_SERVICE_MANAGER)
                 .setPackage(mSystemUiPackage).addFlags(Intent.FLAG_RECEIVER_FOREGROUND),
                 UserHandle.SYSTEM);
+    }
+
+    private void updateRunningAppsCount(int count) {
+        if (count == mRunningAppsCount) {
+            return;
+        }
+        boolean wasVisible = mRunningAppsCount > 0;
+        boolean visible = count > 0;
+        boolean focusedRowRemoved = wasVisible && !visible
+                && !mQuickSettingsHeaderFocused && isRunningAppsRowFocused();
+        mRunningAppsCount = count;
+        mRunningApps.setVisibility(visible ? View.VISIBLE : View.GONE);
+        if (visible) {
+            mRunningApps.setText(mContext.getResources().getQuantityString(
+                    com.android.internal.R.plurals.quick_settings_overlay_running_apps_count,
+                    count, count));
+        }
+        if (wasVisible != visible) {
+            int row = getVisibleButtonRowCount();
+            // Keep focus on the same slider when this row is inserted or removed above it.
+            if (visible && mFocusedRow >= row) {
+                ++mFocusedRow;
+            } else if (!visible && mFocusedRow > row) {
+                --mFocusedRow;
+            }
+            ensureQuickSettingsFocus();
+            updateFocus(focusedRowRemoved);
+        }
     }
 
     private void startStateMonitoring() {
@@ -2338,8 +2357,7 @@ final class QuickSettingsOverlay {
         mRoot.removeCallbacks(mRefreshStateRunnable);
         ++mRunningAppsRequestGeneration;
         mRunningAppsRequestPending = false;
-        mRunningAppsCount = -1;
-        mRunningApps.setText(com.android.internal.R.string.quick_settings_overlay_running_apps);
+        updateRunningAppsCount(-1);
         if (mTorchCallback != null) {
             mCameraManager.unregisterTorchCallback(mTorchCallback);
             mTorchCallback = null;
@@ -2347,6 +2365,10 @@ final class QuickSettingsOverlay {
     }
 
     private void updateFocus() {
+        updateFocus(true);
+    }
+
+    private void updateFocus(boolean scrollToSelection) {
         if (mMode == MODE_NOTIFICATIONS) {
             mSettingsButton.setVisibility(View.GONE);
             if (mShowingRemoteInputEditor) {
@@ -2356,7 +2378,9 @@ final class QuickSettingsOverlay {
                 }
                 mCaption.setText(mRemoteInputActionItem != null
                         ? mRemoteInputActionItem.label : "Reply");
-                scrollFocusedItemIntoView();
+                if (scrollToSelection) {
+                    scrollFocusedItemIntoView();
+                }
                 return;
             }
             if (mShowingNotificationActionMenu) {
@@ -2372,7 +2396,9 @@ final class QuickSettingsOverlay {
                                         ? NotificationPresentation.REDACTED
                                         : NotificationPresentation.FULL)
                         : "Notification");
-                scrollFocusedItemIntoView();
+                if (scrollToSelection) {
+                    scrollFocusedItemIntoView();
+                }
                 return;
             }
             for (int i = 0; i < mNotificationItems.size(); i++) {
@@ -2382,7 +2408,9 @@ final class QuickSettingsOverlay {
                         focused ? 0xffffffff : 0xff4c5963, dp(12)));
             }
             mCaption.setText(mNotificationsCaption);
-            scrollFocusedItemIntoView();
+            if (scrollToSelection) {
+                scrollFocusedItemIntoView();
+            }
             return;
         }
 
@@ -2394,7 +2422,9 @@ final class QuickSettingsOverlay {
                 item.row.setBackground(makeBackground(0xff263038,
                         focused ? 0xffffffff : 0xff4c5963, dp(12)));
             }
-            scrollFocusedItemIntoView();
+            if (scrollToSelection) {
+                scrollFocusedItemIntoView();
+            }
             return;
         }
 
@@ -2429,7 +2459,9 @@ final class QuickSettingsOverlay {
         } else {
             mCaption.setText(mButtonLabels[getFocusedButtonIndex()]);
         }
-        scrollFocusedItemIntoView();
+        if (scrollToSelection) {
+            scrollFocusedItemIntoView();
+        }
     }
 
     private void updateBrightness() {
@@ -2633,7 +2665,7 @@ final class QuickSettingsOverlay {
     }
 
     private boolean isRunningAppsRowFocused() {
-        return mFocusedRow == getVisibleButtonRowCount();
+        return mRunningAppsCount > 0 && mFocusedRow == getVisibleButtonRowCount();
     }
 
     private boolean isVolumeRowFocused() {
@@ -2878,7 +2910,8 @@ final class QuickSettingsOverlay {
         if (row < getVisibleButtonRowCount()) {
             return rowHasVisibleButtons(row);
         }
-        return row == getVisibleButtonRowCount() || row == getBrightnessRowIndex()
+        return (mRunningAppsCount > 0 && row == getVisibleButtonRowCount())
+                || row == getBrightnessRowIndex()
                 || getVolumeControlIndexForRow(row) >= 0;
     }
 
@@ -2942,11 +2975,13 @@ final class QuickSettingsOverlay {
     }
 
     private int getBrightnessRowIndex() {
-        return mSliderVisibility[SLIDER_BRIGHTNESS] ? getVisibleButtonRowCount() + 1 : -1;
+        return mSliderVisibility[SLIDER_BRIGHTNESS]
+                ? getVisibleButtonRowCount() + getRunningAppsRowCount() : -1;
     }
 
     private int getFirstVolumeRowIndex() {
-        return getVisibleButtonRowCount() + 1 + (mSliderVisibility[SLIDER_BRIGHTNESS] ? 1 : 0);
+        return getVisibleButtonRowCount() + getRunningAppsRowCount()
+                + (mSliderVisibility[SLIDER_BRIGHTNESS] ? 1 : 0);
     }
 
     private int getLastRowIndex() {
@@ -2954,7 +2989,11 @@ final class QuickSettingsOverlay {
     }
 
     private int getQuickSettingsContentRowCount() {
-        return getVisibleButtonRowCount() + 1 + getVisibleSliderRowCount();
+        return getVisibleButtonRowCount() + getRunningAppsRowCount() + getVisibleSliderRowCount();
+    }
+
+    private int getRunningAppsRowCount() {
+        return mRunningAppsCount > 0 ? 1 : 0;
     }
 
     private int getVisibleSliderRowCount() {
