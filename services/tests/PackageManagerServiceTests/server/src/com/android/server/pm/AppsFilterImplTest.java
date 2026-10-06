@@ -249,6 +249,74 @@ public class AppsFilterImplTest {
     }
 
     @Test
+    public void testSamsungWearCompanionsCannotSeeGmsEvenWithCachedVisibility() {
+        AppsFilterImpl appsFilter = new AppsFilterImpl(mFeatureConfigMock,
+                new String[]{}, false, null, mMockHandler);
+        PackageSetting gms = Mockito.mock(PackageSetting.class);
+        when(gms.getPackageName()).thenReturn("com.google.android.gms");
+        when(gms.getAppId()).thenReturn(DUMMY_TARGET_APPID);
+        PackageSetting china = Mockito.mock(PackageSetting.class);
+        when(china.getPackageName()).thenReturn("com.google.android.wearable.app.cn");
+        when(china.getAppId()).thenReturn(DUMMY_ACTOR_APPID);
+        // Model a cache allowing everything, including prior interactions with microG.
+        appsFilter.mCacheReady = true;
+        for (int userId : USER_ARRAY) {
+            int uid = UserHandle.getUid(userId, DUMMY_CALLING_APPID);
+            appsFilter.mShouldFilterCache.put(uid,
+                    UserHandle.getUid(userId, DUMMY_TARGET_APPID), false);
+            appsFilter.mShouldFilterCache.put(uid,
+                    UserHandle.getUid(userId, DUMMY_ACTOR_APPID), false);
+        }
+        for (String name : new String[]{"com.samsung.android.app.watchmanager",
+                "com.samsung.android.waterplugin",
+                "com.samsung.wearable.watch5plugin",
+                "com.samsung.wearable.watch6plugin",
+                "com.samsung.wearable.watch7plugin",
+                "com.samsung.wearable.watch8plugin",
+                "com.samsung.wearable.watch9plugin"}) {
+            PackageSetting caller = Mockito.mock(PackageSetting.class);
+            when(caller.getPackageName()).thenReturn(name);
+            for (int userId : USER_ARRAY) {
+                int uid = UserHandle.getUid(userId, DUMMY_CALLING_APPID);
+                assertTrue(appsFilter.shouldFilterApplication(
+                        mSnapshot, uid, caller, gms, userId));
+                assertFalse(appsFilter.shouldFilterApplication(
+                        mSnapshot, uid, caller, china, userId));
+            }
+        }
+        for (String name : new String[]{"com.example.other",
+                "com.samsung.wearable.watch3plugin", "com.samsung.wearable.watch10plugin",
+                "com.samsung.wearable.watch5plugin.other", "com.samsung.wearable.budsplugin"}) {
+            PackageSetting other = Mockito.mock(PackageSetting.class);
+            when(other.getPackageName()).thenReturn(name);
+            assertFalse(appsFilter.shouldFilterApplication(
+                    mSnapshot, DUMMY_CALLING_APPID, other, gms, SYSTEM_USER));
+        }
+        assertFalse(appsFilter.shouldFilterApplication(
+                mSnapshot, Process.SYSTEM_UID, null, gms, SYSTEM_USER));
+        assertFalse(appsFilter.shouldFilterApplication(
+                mSnapshot, DUMMY_TARGET_APPID, gms, gms, SYSTEM_USER));
+    }
+
+    @Test
+    public void testSamsungWearGmsOverrideWithoutVisibilityFiltering() {
+        AppsFilterImpl appsFilter = new AppsFilterImpl(mFeatureConfigMock,
+                new String[]{}, false, null, mMockHandler);
+        when(mFeatureConfigMock.isGloballyEnabled()).thenReturn(false);
+        PackageSetting gms = Mockito.mock(PackageSetting.class);
+        when(gms.getPackageName()).thenReturn("com.google.android.gms");
+        when(gms.getAppId()).thenReturn(DUMMY_TARGET_APPID);
+        PackageSetting caller = Mockito.mock(PackageSetting.class);
+        when(caller.getPackageName()).thenReturn("com.samsung.wearable.watch7plugin");
+        SharedUserSetting shared = new SharedUserSetting("wear", 0, 0);
+        shared.addPackage(caller);
+        assertTrue(appsFilter.shouldFilterApplication(
+                mSnapshot, DUMMY_CALLING_APPID, shared, gms, SYSTEM_USER));
+        assertTrue(appsFilter.shouldFilterApplication(
+                mSnapshot, DUMMY_CALLING_APPID, caller, gms, SYSTEM_USER));
+    }
+
+    @Test
     public void testSystemReadyPropogates() throws Exception {
         final AppsFilterImpl appsFilter =
                 new AppsFilterImpl(mFeatureConfigMock, new String[]{}, /* systemAppsQueryable */

@@ -350,6 +350,13 @@ public abstract class AppsFilterBase implements AppsFilterSnapshot {
                         && !isImplicitlyQueryable(callingUid, targetUid)
                         && !isQueryableBySdkSandbox(callingUid, targetUid);
             }
+            // DumberOS: microG does not implement Wear OS. Keep Samsung's original signed
+            // apps on the China companion path even when microG is installed. This must
+            // precede the cache, QUERY_ALL_PACKAGES and implicit visibility grants.
+            if ("com.google.android.gms".equals(targetPkgSetting.getPackageName())
+                    && isSamsungWearCompanion(callingSetting)) {
+                return true;
+            }
             // use cache
             if (mCacheReady && mCacheEnabled) {
                 if (!shouldFilterApplicationUsingCache(callingUid,
@@ -372,6 +379,30 @@ public abstract class AppsFilterBase implements AppsFilterSnapshot {
                 Trace.traceEnd(TRACE_TAG_PACKAGE_MANAGER);
             }
         }
+    }
+
+    private static boolean isSamsungWearCompanion(@Nullable Object callingSetting) {
+        if (callingSetting instanceof PackageStateInternal) {
+            String name = ((PackageStateInternal) callingSetting).getPackageName();
+            return "com.samsung.android.app.watchmanager".equals(name)
+                    || "com.samsung.android.waterplugin".equals(name) // Watch4
+                    || "com.samsung.wearable.watch5plugin".equals(name)
+                    || "com.samsung.wearable.watch6plugin".equals(name)
+                    || "com.samsung.wearable.watch7plugin".equals(name)
+                    || "com.samsung.wearable.watch8plugin".equals(name)
+                    // Reserved for Watch9 if Samsung retains this package naming scheme.
+                    || "com.samsung.wearable.watch9plugin".equals(name);
+        }
+        if (callingSetting instanceof SharedUserSetting) {
+            // Package visibility is UID-scoped, so shared-UID packages have one policy.
+            for (PackageStateInternal pkg :
+                    ((SharedUserSetting) callingSetting).getPackageStates()) {
+                if (isSamsungWearCompanion(pkg)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     protected boolean shouldFilterApplicationUsingCache(int callingUid, int appId, int userId) {
