@@ -56,11 +56,14 @@ import android.net.ConnectivityManager;
 import android.net.TetheringManager;
 import android.net.wifi.WifiManager;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.PowerManager;
 import android.os.RemoteException;
 import android.os.ServiceManager;
 import android.os.UserHandle;
 import android.provider.Settings;
+import android.service.notification.NotificationListenerService;
 import android.service.notification.NotificationStats;
 import android.service.notification.StatusBarNotification;
 import android.telephony.TelephonyManager;
@@ -74,6 +77,7 @@ import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewTreeObserver;
 import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
 import android.view.animation.LinearInterpolator;
@@ -135,6 +139,7 @@ final class QuickSettingsOverlay {
     private static final int SLIDER_COUNT = VOLUME_COUNT + 1;
     private static final int DEFAULT_VISIBLE_SLIDER_MASK = (1 << SLIDER_COUNT) - 1;
     private static final int NOTIFICATION_DISMISS_ANIMATION_MS = 320;
+    private static final int NOTIFICATION_REFRESH_DELAY_MS = 100;
     // Expansion time when turning on; total fade-in and contraction time when turning off.
     private static final int TOGGLE_ANIMATION_DURATION_MS = 300;
     private static final int TOGGLE_FADE_OUT_DURATION_MS = 1000;
@@ -148,6 +153,12 @@ final class QuickSettingsOverlay {
     private static final long STATE_REFRESH_INTERVAL_MS = 500;
     private final Runnable mRefreshStateRunnable = this::refreshVisibleState;
     private CameraManager.TorchCallback mTorchCallback;
+    private final Handler mHandler = new Handler(Looper.myLooper());
+    private final Runnable mRefreshNotificationsRunnable = this::refreshVisibleNotifications;
+    private NotificationRefreshListener mNotificationListener;
+    private ViewTreeObserver.OnPreDrawListener mNotificationScrollRestore;
+    private boolean mNotificationsDirty;
+    private boolean mNotificationTouchInProgress;
 
     private final Context mContext;
     private final WindowManager mWindowManager;
@@ -280,6 +291,20 @@ final class QuickSettingsOverlay {
         loadSliderVisibility();
 
         mRoot = new LinearLayout(context) {
+            @Override
+            public boolean dispatchTouchEvent(MotionEvent event) {
+                if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                    mNotificationTouchInProgress = true;
+                } else if (event.getActionMasked() == MotionEvent.ACTION_UP
+                        || event.getActionMasked() == MotionEvent.ACTION_CANCEL) {
+                    mNotificationTouchInProgress = false;
+                    if (mNotificationsDirty) {
+                        scheduleNotificationOverlayRefresh();
+                    }
+                }
+                return super.dispatchTouchEvent(event);
+            }
+
             @Override
             public boolean dispatchKeyEvent(KeyEvent event) {
                 if (handleRootKeyEvent(event)) {
@@ -975,6 +1000,11 @@ final class QuickSettingsOverlay {
     }
 
     private void refreshNotifications() {
+        clearNotificationScrollRestore();
+        mNotificationsDirty = false;
+        String focusedKey = mFocusedNotification >= 0
+                && mFocusedNotification < mNotificationItems.size()
+                ? mNotificationItems.get(mFocusedNotification).sbn.getKey() : null;
         mNotificationItems.clear();
         mNotificationsContainer.removeAllViews();
 
@@ -1005,6 +1035,12 @@ final class QuickSettingsOverlay {
             return;
         }
 
+        for (int i = 0; i < mNotificationItems.size(); i++) {
+            if (mNotificationItems.get(i).sbn.getKey().equals(focusedKey)) {
+                mFocusedNotification = i;
+                return;
+            }
+        }
         mFocusedNotification = MathUtils.constrain(mFocusedNotification, 0,
                 mNotificationItems.size() - 1);
     }
@@ -1247,13 +1283,94 @@ final class QuickSettingsOverlay {
     }
 
     private void scheduleNotificationOverlayRefresh() {
-        mRoot.postDelayed(() -> {
-            if (!mShowing || mMode != MODE_NOTIFICATIONS) {
-                return;
+        if (!mShowing || mMode != MODE_NOTIFICATIONS) {
+            return;
+        }
+        mNotificationsDirty = true;
+        // Coalesce bursts without postponing the refresh indefinitely for busy apps.
+        if (!mHandler.hasCallbacks(mRefreshNotificationsRunnable)) {
+            mHandler.postDelayed(mRefreshNotificationsRunnable, NOTIFICATION_REFRESH_DELAY_MS);
+        }
+    }
+
+    private void refreshVisibleNotifications() {
+        if (!mShowing || mMode != MODE_NOTIFICATIONS || !mNotificationsDirty
+                || !isShowingNotificationList() || mNotificationDismissInProgress
+                || mNotificationTouchInProgress) {
+            // Closing an action/reply view reloads the list; touch/dismiss completion
+            // schedules any pending update without destroying an interaction in progress.
+            return;
+        }
+        final int scrollY = mScrollView.getScrollY();
+        String anchorKey = null;
+        int anchorOffset = 0;
+        for (NotificationItem item : mNotificationItems) {
+            int top = getRelativeTop(item.row, mScrollableContent);
+            if (top + item.row.getHeight() > scrollY) {
+                anchorKey = item.sbn.getKey();
+                anchorOffset = top - scrollY;
+                break;
             }
-            refreshNotifications();
-            updateFocus();
-        }, NOTIFICATION_DISMISS_ANIMATION_MS);
+        }
+        refreshNotifications();
+        updateFocus(false);
+        final String key = anchorKey;
+        final int offset = anchorOffset;
+        mNotificationScrollRestore = () -> {
+            clearNotificationScrollRestore();
+            if (mShowing && mMode == MODE_NOTIFICATIONS && isShowingNotificationList()) {
+                int target = scrollY;
+                for (NotificationItem item : mNotificationItems) {
+                    if (item.sbn.getKey().equals(key)) {
+                        target = getRelativeTop(item.row, mScrollableContent) - offset;
+                        break;
+                    }
+                }
+                mScrollView.scrollTo(0, Math.max(0, target));
+            }
+            return true;
+        };
+        // Row heights/positions are only valid after layout, immediately before drawing.
+        mRoot.getViewTreeObserver().addOnPreDrawListener(mNotificationScrollRestore);
+    }
+
+    private void clearNotificationScrollRestore() {
+        if (mNotificationScrollRestore != null) {
+            mRoot.getViewTreeObserver().removeOnPreDrawListener(mNotificationScrollRestore);
+            mNotificationScrollRestore = null;
+        }
+    }
+
+    private final class NotificationRefreshListener extends NotificationListenerService {
+        private void onNotificationsChanged() {
+            // NotificationListenerService dispatches on the main looper; this overlay
+            // belongs to the policy looper. Ignore callbacks from an earlier showing.
+            mHandler.post(() -> {
+                if (mNotificationListener == this) {
+                    scheduleNotificationOverlayRefresh();
+                }
+            });
+        }
+
+        @Override
+        public void onListenerConnected() {
+            onNotificationsChanged();
+        }
+
+        @Override
+        public void onNotificationPosted(StatusBarNotification sbn) {
+            onNotificationsChanged();
+        }
+
+        @Override
+        public void onNotificationRemoved(StatusBarNotification sbn) {
+            onNotificationsChanged();
+        }
+
+        @Override
+        public void onNotificationRankingUpdate(RankingMap rankingMap) {
+            onNotificationsChanged();
+        }
     }
 
     private StatusBarNotification[] getActiveNotifications() {
@@ -2325,6 +2442,17 @@ final class QuickSettingsOverlay {
     }
 
     private void startStateMonitoring() {
+        if (mNotificationListener == null) {
+            mNotificationListener = new NotificationRefreshListener();
+            try {
+                mNotificationListener.registerAsSystemService(mContext,
+                        new ComponentName(mContext, NotificationRefreshListener.class),
+                        UserHandle.USER_ALL);
+            } catch (RemoteException | RuntimeException e) {
+                mNotificationListener = null;
+                Slog.w(TAG, "Unable to monitor notifications", e);
+            }
+        }
         if (mCameraManager != null && mTorchCallback == null) {
             try {
                 getRearFlashCameraId();
@@ -2354,6 +2482,25 @@ final class QuickSettingsOverlay {
     }
 
     private void stopStateMonitoring() {
+        NotificationRefreshListener listener = mNotificationListener;
+        mNotificationListener = null;
+        if (listener != null) {
+            try {
+                listener.unregisterAsSystemService();
+            } catch (RemoteException | RuntimeException e) {
+                Slog.w(TAG, "Unable to stop monitoring notifications", e);
+            }
+        }
+        mHandler.removeCallbacks(mRefreshNotificationsRunnable);
+        mNotificationsDirty = false;
+        mNotificationTouchInProgress = false;
+        if (mNotificationDismissInProgress) {
+            for (NotificationItem item : mNotificationItems) {
+                item.row.animate().cancel();
+            }
+            mNotificationDismissInProgress = false;
+        }
+        clearNotificationScrollRestore();
         mRoot.removeCallbacks(mRefreshStateRunnable);
         ++mRunningAppsRequestGeneration;
         mRunningAppsRequestPending = false;
