@@ -544,6 +544,10 @@ public class PackageManagerServiceUtils {
      */
     private static boolean matchSignatureInSystem(@NonNull String packageName,
             @NonNull SigningDetails signingDetails, PackageSetting disabledPkgSetting) {
+        if (AndroidAutoPlaceholder.isTrustedFactoryUpdate(packageName, disabledPkgSetting,
+                signingDetails)) {
+            return true;
+        }
         if (signingDetails.checkCapability(
                 disabledPkgSetting.getSigningDetails(),
                 SigningDetails.CertCapabilities.INSTALLED_DATA)

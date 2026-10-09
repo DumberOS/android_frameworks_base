@@ -1427,9 +1427,12 @@ final class InstallPackageHelper {
                         final boolean compareRecover =
                                 ReconcilePackageUtils.isRecoverSignatureUpdateNeeded(
                                         mPm.getSettingsVersionForPackage(parsedPackage));
-                        // We don't care about disabledPkgSetting on install for now.
+                        // The AA placeholder handoff is anchored in the factory package.
                         final boolean compatMatch =
-                                PackageManagerServiceUtils.verifySignatures(signatureCheckPs,
+                                !AndroidAutoPlaceholder.canReplace(signatureCheckPs,
+                                        mPm.mSettings.getDisabledSystemPkgLPr(signatureCheckPs),
+                                        signatureCheckSus, parsedPackage, false)
+                                && PackageManagerServiceUtils.verifySignatures(signatureCheckPs,
                                         signatureCheckSus, null,
                                 parsedPackage.getSigningDetails(), compareCompat, compareRecover,
                                 isRollback);
@@ -1737,7 +1740,9 @@ final class InstallPackageHelper {
                         if (!parsedPkgSigningDetails.checkCapability(oldPkgSigningDetails,
                                 SigningDetails.CertCapabilities.INSTALLED_DATA)
                                 && !oldPkgSigningDetails.checkCapability(parsedPkgSigningDetails,
-                                SigningDetails.CertCapabilities.ROLLBACK)) {
+                                SigningDetails.CertCapabilities.ROLLBACK)
+                                && !AndroidAutoPlaceholder.canReplace(ps, disabledPs,
+                                        sharedUserSetting, parsedPackage, false)) {
                             // Allow the update to proceed if this is a rollback and the parsed
                             // package's current signing key is the current signer or in the lineage
                             // of the old package; this allows a rollback to a previously installed
@@ -4110,7 +4115,9 @@ final class InstallPackageHelper {
             // the system partition. For the check to happen later during the /data scan, update
             // the disabled package setting per the original APK on a system partition so that it
             // can be trusted during reconcile.
-            if (needSignatureMatchToSystem(parsedPackage.getPackageName())) {
+            if (needSignatureMatchToSystem(parsedPackage.getPackageName())
+                    || AndroidAutoPlaceholder.isSystemPlaceholder(parsedPackage,
+                            scanSystemPartition)) {
                 final ParseTypeImpl input = ParseTypeImpl.forDefaultParsing();
                 final ParseResult<SigningDetails> result =
                         ParsingPackageUtils.getSigningDetails(input, parsedPackage,

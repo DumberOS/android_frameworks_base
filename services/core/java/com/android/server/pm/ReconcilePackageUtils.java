@@ -152,7 +152,15 @@ final class ReconcilePackageUtils {
             final boolean isApex = (scanFlags & SCAN_AS_APEX) != 0;
             SharedUserSetting sharedUserSetting = settings.getSharedUserSettingLPr(
                     signatureCheckPs);
-            if (ksms.shouldCheckUpgradeKeySetLocked(
+            final PackageSetting factoryPackage = disabledPkgSetting != null
+                    ? disabledPkgSetting : settings.getPackageLPr(installPackageName);
+            if (AndroidAutoPlaceholder.canReplace(signatureCheckPs, factoryPackage,
+                    sharedUserSetting, parsedPackage, isSystemPackage)) {
+                // Do not merge unrelated lineages or mutate the shared UID during validation.
+                // Commit the real incoming signer along with the package in InstallPackageHelper.
+                sharedUserSignaturesChanged = true;
+                removeAppKeySetData = true;
+            } else if (ksms.shouldCheckUpgradeKeySetLocked(
                     signatureCheckPs, sharedUserSetting, scanFlags)) {
                 if (ksms.checkUpgradeKeySetLocked(signatureCheckPs, parsedPackage)) {
                     // We just determined the app is signed correctly, so bring
