@@ -91,6 +91,15 @@ final class AndroidAutoPlaceholder {
         return true;
     }
 
+    /** Allows a verified replacement to redeclare permissions still owned by the placeholder. */
+    static boolean canReclaimPermissions(String ownerPackageName, PackageSetting owner,
+            SharedUserSetting shared, ParsedPackage incoming) {
+        // Reuse the factory-anchored forward handoff, never permission ownership belonging to
+        // another package. Do not change signing records during install preparation.
+        return PACKAGE.equals(ownerPackageName)
+                && canReplace(owner, null, shared, incoming, false);
+    }
+
     /**
      * The factory setting comes from Settings, never from the incoming /data APK. A forward
      * handoff needs that trusted anchor. A reverse handoff only accepts a code-free placeholder
@@ -109,9 +118,14 @@ final class AndroidAutoPlaceholder {
         SigningDetails next = incoming.getSigningDetails();
         SigningDetails uid = shared.getSigningDetails();
         if (isSystemPlaceholder(incoming, systemScan) && known(next)) {
-            // Uninstall updates may already have restored the factory PackageSetting, while
-            // the dedicated shared UID still holds Google's signer. Handle both states.
-            return (isGoogle(old) || same(old, next))
+            // enableSystemPackageLPw recreates the setting without copying its signatures.
+            // During uninstall-updates it can therefore be UNKNOWN while the dedicated UID
+            // still holds Google's signer. Only accept that state for the factory path and
+            // version, with the incoming APK independently verified from the system image.
+            boolean recreatedFactory = old == SigningDetails.UNKNOWN
+                    && existing.getVersionCode() == 1 && isFactoryPath(existing.getPathString())
+                    && isGoogle(uid);
+            return (isGoogle(old) || same(old, next) || recreatedFactory)
                     && (isGoogle(uid) || same(uid, next))
                     && (isGoogle(old) || isGoogle(uid));
         }

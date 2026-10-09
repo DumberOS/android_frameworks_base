@@ -2041,6 +2041,10 @@ final class InstallPackageHelper {
             sourcePackageSetting = mPm.mSettings.getPackageLPr(sourcePackageName);
             ksms = mPm.mSettings.getKeySetManagerService();
             sharedUserSetting = mPm.mSettings.getSharedUserSettingLPr(sourcePackageSetting);
+            if (AndroidAutoPlaceholder.canReclaimPermissions(sourcePackageName,
+                    sourcePackageSetting, sharedUserSetting, parsedPackage)) {
+                return true;
+            }
         }
 
         final SigningDetails sourceSigningDetails = (sourcePackageSetting == null

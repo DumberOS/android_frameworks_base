@@ -243,6 +243,37 @@ public class AndroidAutoPlaceholderTest {
     }
 
     @Test
+    public void restoresUidAfterSettingsRecreatesUnsignedPackageRecord() {
+        prepareRestore();
+        // Model enableSystemPackageLPw -> addPackageLPw: a fresh PackageSetting whose
+        // signing details have not been populated yet, not the old disabled setting.
+        PackageSetting recreated = new PackageSetting(PACKAGE, null,
+                new java.io.File(FACTORY), android.content.pm.ApplicationInfo.FLAG_SYSTEM,
+                android.content.pm.ApplicationInfo.PRIVATE_FLAG_PRIVILEGED,
+                java.util.UUID.randomUUID()).setLongVersionCode(1);
+        assertSame(SigningDetails.UNKNOWN, recreated.getSigningDetails());
+        assertTrue(AndroidAutoPlaceholder.canReplace(recreated, null, mShared, mIncoming, true));
+        assertSame(mGoogle, mShared.getSigningDetails());
+        assertFalse(AndroidAutoPlaceholder.canReplace(recreated, null, mShared, mIncoming, false));
+    }
+
+    @Test
+    public void unknownSignerRecoveryRequiresFactoryRecordAndGoogleUid() {
+        prepareRestore();
+        PackageSetting recreated = setting(SigningDetails.UNKNOWN, FACTORY);
+        when(recreated.getPathString()).thenReturn("/data/app/AndroidAutoPlaceholder");
+        assertFalse(AndroidAutoPlaceholder.canReplace(recreated, null, mShared, mIncoming, true));
+        when(recreated.getPathString()).thenReturn(FACTORY);
+        when(recreated.getVersionCode()).thenReturn(2L);
+        assertFalse(AndroidAutoPlaceholder.canReplace(recreated, null, mShared, mIncoming, true));
+        when(recreated.getVersionCode()).thenReturn(1L);
+        mShared.signatures.mSigningDetails = mLocal;
+        assertFalse(AndroidAutoPlaceholder.canReplace(recreated, null, mShared, mIncoming, true));
+        mShared.signatures.mSigningDetails = SigningDetails.UNKNOWN;
+        assertFalse(AndroidAutoPlaceholder.canReplace(recreated, null, mShared, mIncoming, true));
+    }
+
+    @Test
     public void restoreCannotBeRequestedByInstallerOrFromDataPartition() {
         prepareRestore();
         assertFalse(AndroidAutoPlaceholder.canReplace(mFactory, null, mShared, mIncoming, false));
@@ -301,5 +332,37 @@ public class AndroidAutoPlaceholderTest {
     public void supportsSystemProductMountPath() {
         when(mFactory.getPathString()).thenReturn("/system" + FACTORY);
         assertTrue(AndroidAutoPlaceholder.canReplace(mFactory, null, mShared, mIncoming, false));
+    }
+
+    @Test
+    public void googleReplacementCanReclaimItsOwnPermissionsWithoutChangingSigners() {
+        assertTrue(AndroidAutoPlaceholder.canReclaimPermissions(
+                PACKAGE, mFactory, mShared, mIncoming));
+        assertSame(mLocal, mFactory.getSigningDetails());
+        assertSame(mLocal, mShared.getSigningDetails());
+        assertSame(mGoogle, mIncoming.getSigningDetails());
+    }
+
+    @Test
+    public void permissionHandoffRejectsOtherOwnersAndUntrustedReplacements() {
+        assertFalse(AndroidAutoPlaceholder.canReclaimPermissions(
+                "com.example.other", mFactory, mShared, mIncoming));
+        assertFalse(AndroidAutoPlaceholder.canReclaimPermissions(
+                PACKAGE, null, mShared, mIncoming));
+        when(mIncoming.getPackageName()).thenReturn("com.example.other");
+        assertFalse(AndroidAutoPlaceholder.canReclaimPermissions(
+                PACKAGE, mFactory, mShared, mIncoming));
+        when(mIncoming.getPackageName()).thenReturn(PACKAGE);
+        when(mIncoming.getSigningDetails()).thenReturn(mLocal);
+        assertFalse(AndroidAutoPlaceholder.canReclaimPermissions(
+                PACKAGE, mFactory, mShared, mIncoming));
+    }
+
+    @Test
+    public void permissionHandoffDoesNotOverrideNormalGoogleUpdateChecks() {
+        PackageSetting installed = setting(mGoogle, "/data/app/random/gearhead");
+        mShared.signatures.mSigningDetails = mGoogle;
+        assertFalse(AndroidAutoPlaceholder.canReclaimPermissions(
+                PACKAGE, installed, mShared, mIncoming));
     }
 }
