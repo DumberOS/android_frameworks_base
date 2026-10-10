@@ -151,7 +151,10 @@ import android.media.AudioManager;
 import android.media.AudioManagerInternal;
 import android.media.AudioSystem;
 import android.media.IAudioService;
+import android.media.session.MediaController;
+import android.media.session.MediaSession;
 import android.media.session.MediaSessionLegacyHelper;
+import android.media.session.MediaSessionManager;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.DeviceIdleManager;
@@ -773,6 +776,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     /** Currently fully consumed key codes per device */
     private final SparseArray<Set<Integer>> mConsumedKeysForDevice = new SparseArray<>();
     PowerManager.WakeLock mBroadcastWakeLock;
+    private ScreenOffMediaKeyHandler mScreenOffMediaKeyHandler;
     PowerManager.WakeLock mPowerKeyWakeLock;
     boolean mHavePendingMediaKeyRepeatWithWakeLock;
 
@@ -2768,6 +2772,19 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         mPowerManager = (PowerManager) mContext.getSystemService(Context.POWER_SERVICE);
         mBroadcastWakeLock = mPowerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
                 "PhoneWindowManager.mBroadcastWakeLock");
+        final PowerManager.WakeLock mediaSeekWakeLock = mPowerManager.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK, "PhoneWindowManager.mediaSeek");
+        mediaSeekWakeLock.setReferenceCounted(false);
+        mScreenOffMediaKeyHandler = new ScreenOffMediaKeyHandler(
+                Handler.createAsync(mHandler.getLooper()), mBroadcastWakeLock, mediaSeekWakeLock,
+                () -> {
+                    final MediaSessionManager manager =
+                            mContext.getSystemService(MediaSessionManager.class);
+                    final MediaSession.Token token = manager == null
+                            ? null : manager.getMediaKeyEventSession();
+                    return token == null ? null : new MediaController(mContext, token);
+                }, this::dispatchMediaKeyWithWakeLockToAudioService,
+                () -> !mPowerManager.isInteractive() && mDpadScreenOffAction != Action.NOTHING);
         mPowerKeyWakeLock = mPowerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
                 "PhoneWindowManager.mPowerKeyWakeLock");
         mEnableShiftMenuBugReports = "1".equals(SystemProperties.get("ro.debuggable"));
@@ -5709,6 +5726,14 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         if (dispatchKeyToKeyHandlers(event)) {
             return 0;
         }
+        if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+            final boolean mediaKeysEnabled = !interactive
+                    && mDpadScreenOffAction != Action.NOTHING;
+            if (mScreenOffMediaKeyHandler.intercept(event, mediaKeysEnabled,
+                    mediaKeysEnabled && isMediaPlayingOrRoutedToExternalDevice())) {
+                return 0;
+            }
+        }
         if (!interactive && mDpadScreenOffAction != Action.NOTHING) {
             switch (keyCode) {
                 case KeyEvent.KEYCODE_DPAD_DOWN:
@@ -5722,20 +5747,10 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                     }
                     return 0;
                 case KeyEvent.KEYCODE_DPAD_CENTER:
-                case KeyEvent.KEYCODE_DPAD_LEFT:
-                case KeyEvent.KEYCODE_DPAD_RIGHT:
                     if (isMediaPlayingOrRoutedToExternalDevice() && event.getRepeatCount() == 0) {
-                        final int mediaKeyCode;
-                        if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
-                            mediaKeyCode = KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE;
-                        } else if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
-                            mediaKeyCode = KeyEvent.KEYCODE_MEDIA_PREVIOUS;
-                        } else {
-                            mediaKeyCode = KeyEvent.KEYCODE_MEDIA_NEXT;
-                        }
                         KeyEvent mediaKeyEvent = new KeyEvent(event.getDownTime(),
                                 event.getEventTime(), down ? KeyEvent.ACTION_DOWN
-                                        : KeyEvent.ACTION_UP, mediaKeyCode, 0);
+                                        : KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, 0);
                         mBroadcastWakeLock.acquire();
                         Message msg = mHandler.obtainMessage(
                                 MSG_DISPATCH_MEDIA_KEY_WITH_WAKE_LOCK, mediaKeyEvent);
@@ -6712,6 +6727,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         if (displayGroupId != Display.DEFAULT_DISPLAY_GROUP) {
             return;
         }
+        mScreenOffMediaKeyHandler.cancelOnWake();
         EventLogTags.writeScreenToggled(1);
 
 
