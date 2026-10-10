@@ -140,11 +140,11 @@ import java.io.Reader;
 
 import android.annotation.FlaggedApi;
 
-@SuppressWarnings("MissingNullability")
 /**
  * BLabl
  * @hide
  */
+@SuppressWarnings("MissingNullability")
 public interface XmlPullParser {
 
     /** This constant represents the default namespace (empty string "") */

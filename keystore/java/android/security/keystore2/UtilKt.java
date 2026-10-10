@@ -12,11 +12,11 @@ import java.util.concurrent.ThreadLocalRandom;
 import android.annotation.FlaggedApi;
 
 //@FlaggedApi("")
-@SuppressWarnings("MissingNullability")
 /**
  * Blabla
  * @hide
  */
+@SuppressWarnings("MissingNullability")
 public final class UtilKt {
     private static final String TAG = "UtilKt";
 

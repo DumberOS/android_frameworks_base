@@ -82,7 +82,9 @@ public class SignalStrength implements Parcelable {
     CellSignalStrengthGsm mGsm;
     CellSignalStrengthWcdma mWcdma;
     CellSignalStrengthTdscdma mTdscdma;
+    /** @hide */
     protected CellSignalStrengthLte mLte;
+    /** @hide */
     protected CellSignalStrengthNr mNr;
 
     /**

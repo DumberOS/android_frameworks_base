@@ -10,11 +10,11 @@ package android.security.keystore2;
  */
 import android.annotation.FlaggedApi;
 
-@SuppressWarnings("MissingNullability")
 /**
  * BLabl
  * @hide
  */
+@SuppressWarnings("MissingNullability")
 public class XmlPullParserException extends Exception {
     protected Throwable detail;
     protected int row = -1;

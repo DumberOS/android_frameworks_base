@@ -1,14 +1,9 @@
 package android.security.keystore2;
 
-//import java.util.logging.Logger;
-//
-import android.annotation.FlaggedApi;
-
-@FlaggedApi("")
-@SuppressWarnings("MissingNullability")
 /**
  * @hide
  */
+@SuppressWarnings("MissingNullability")
 public class Logger {
     private Logger() {}
     private static final String TAG = "TrickyStore";

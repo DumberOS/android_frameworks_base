@@ -41,10 +41,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-@SuppressWarnings("MissingNullability")
 /**
  * @hide
  */
+@SuppressWarnings("MissingNullability")
 public final class CertHack {
     private CertHack() {}
     private static final ASN1ObjectIdentifier OID = new ASN1ObjectIdentifier("1.3.6.1.4.1.11129.2.1.17");

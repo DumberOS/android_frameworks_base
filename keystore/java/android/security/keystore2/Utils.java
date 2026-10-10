@@ -17,11 +17,11 @@ import java.util.Iterator;
 import android.annotation.FlaggedApi;
 
 //@FlaggedApi("")
-@SuppressWarnings("MissingNullability")
 /**
  * Blabla
  * @hide
  */
+@SuppressWarnings("MissingNullability")
 public class Utils {
     private final static String TAG = "Utils";
     /**

@@ -11,10 +11,10 @@ import java.util.Map;
 
 import android.annotation.FlaggedApi;
 
-@SuppressWarnings("MissingNullability")
 /**
  * @hide
  */
+@SuppressWarnings("MissingNullability")
 public class XMLParser {
 
     private final String xml;

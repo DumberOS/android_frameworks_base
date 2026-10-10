@@ -1045,6 +1045,7 @@ public class SmsMessage {
      * otherwise format is based on current phone type.
      *
      * @return true if Cdma format should be used for MO SMS, false otherwise.
+     * @hide
      */
     @UnsupportedAppUsage
     protected static boolean useCdmaFormatForMoSms() {
@@ -1076,6 +1077,7 @@ public class SmsMessage {
      * Determines whether or not to current phone type is cdma.
      *
      * @return true if current phone type is cdma, false otherwise.
+     * @hide
      */
     protected static boolean isCdmaVoice() {
         return isCdmaVoice(SmsManager.getDefaultSmsSubscriptionId());

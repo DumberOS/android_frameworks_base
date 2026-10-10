@@ -18,11 +18,11 @@ import java.util.Map;
 
 import android.annotation.FlaggedApi;
 
-@SuppressWarnings("MissingNullability")
 /**
  * BLabl
  * @hide
  */
+@SuppressWarnings("MissingNullability")
 public class XmlPullParserFactory {
 
     /**
