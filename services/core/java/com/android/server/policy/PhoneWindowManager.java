@@ -246,6 +246,7 @@ import com.android.server.input.InputManagerInternal;
 import com.android.server.input.KeyboardMetricsCollector;
 import com.android.server.input.KeyboardMetricsCollector.KeyboardLogEvent;
 import com.android.server.inputmethod.InputMethodManagerInternal;
+import com.android.server.notification.NotificationManagerInternal;
 import com.android.server.pm.UserManagerInternal;
 import com.android.server.policy.KeyCombinationManager.TwoKeysCombinationRule;
 import com.android.server.policy.keyguard.KeyguardServiceDelegate;
@@ -558,6 +559,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     volatile boolean mPowerKeyHandled;
     volatile boolean mBackKeyHandled;
     volatile boolean mEndCallKeyHandled;
+    private boolean mCallKeyHandled;
     volatile boolean mCameraGestureTriggered;
     volatile boolean mCameraGestureTriggeredDuringGoingToSleep;
 
@@ -1285,6 +1287,12 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             if (interactive && (telecomManager.isRinging() || telecomManager.isInCall())) {
                 hungUp = telecomManager.endCall();
             }
+        }
+        // The red call key on some keypad phones is mapped to POWER, not ENDCALL.
+        // Match Telecom's screen-on rejection/hang-up policy for notification-only VoIP calls.
+        if (interactive && !hungUp && !mPowerKeyHandled && event.getRepeatCount() == 0
+                && (telecomManager == null || !telecomManager.isInCall())) {
+            hungUp = handleCallNotificationKey(false);
         }
 
         final boolean handledByPowerManager = mPowerManagerInternal.interceptPowerKeyDown(event);
@@ -3937,6 +3945,12 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                 ServiceManager.checkService(DreamService.DREAM_SERVICE));
     }
 
+    private boolean handleCallNotificationKey(boolean answer) {
+        NotificationManagerInternal notifications =
+                LocalServices.getService(NotificationManagerInternal.class);
+        return notifications != null && notifications.handleCallNotificationKey(mCurrentUserId, answer);
+    }
+
     TelecomManager getTelecommService() {
         return (TelecomManager) mContext.getSystemService(Context.TELECOM_SERVICE);
     }
@@ -5941,11 +5955,17 @@ public class PhoneWindowManager implements WindowManagerPolicy {
 
             case KeyEvent.KEYCODE_ENDCALL: {
                 result &= ~ACTION_PASS_TO_USER;
+                if (down && event.getRepeatCount() != 0) {
+                    break;
+                }
                 if (down) {
                     TelecomManager telecomManager = getTelecommService();
                     boolean hungUp = false;
                     if (telecomManager != null) {
                         hungUp = telecomManager.endCall();
+                    }
+                    if (!hungUp && (telecomManager == null || !telecomManager.isInCall())) {
+                        hungUp = handleCallNotificationKey(false);
                     }
                     if (interactive && !hungUp) {
                         mEndCallKeyHandled = false;
@@ -6090,19 +6110,27 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             }
 
             case KeyEvent.KEYCODE_CALL: {
-                if (down) {
+                if (down && event.getRepeatCount() == 0) {
+                    mCallKeyHandled = false;
                     TelecomManager telecomManager = getTelecommService();
                     if (telecomManager != null) {
                         if (telecomManager.isRinging()) {
                             Log.i(TAG, "interceptKeyBeforeQueueing:"
                                   + " CALL key-down while ringing: Answer the call!");
                             telecomManager.acceptRingingCall();
-
-                            // And *don't* pass this key thru to the current activity
-                            // (which is presumably the InCallScreen.)
-                            result &= ~ACTION_PASS_TO_USER;
+                            mCallKeyHandled = true;
                         }
                     }
+                    if (!mCallKeyHandled
+                            && (telecomManager == null || !telecomManager.isInCall())) {
+                        mCallKeyHandled = handleCallNotificationKey(true);
+                    }
+                }
+                if (mCallKeyHandled) {
+                    result &= ~ACTION_PASS_TO_USER;
+                }
+                if (!down) {
+                    mCallKeyHandled = false;
                 }
                 break;
             }

@@ -7942,6 +7942,145 @@ public class NotificationManagerServiceTest extends UiServiceTestCase {
     }
 
     @Test
+    public void testIncomingCallKey_answerAndDecline() throws Exception {
+        PendingIntent answer = mock(PendingIntent.class);
+        PendingIntent decline = mock(PendingIntent.class);
+        Notification notification = addHardwareKeyCall(1, UserHandle.USER_SYSTEM, answer, decline);
+        // An incoming CallStyle notification can also be its call group's summary.
+        notification.flags |= Notification.FLAG_GROUP_SUMMARY;
+
+        assertTrue(mInternalService.handleCallNotificationKey(UserHandle.USER_SYSTEM, true));
+        waitForIdle();
+        verify(answer).send(any(Context.class), eq(0), isNull(), isNull(), isNull(),
+                isNull(), any(Bundle.class));
+        verify(decline, never()).send(any(Context.class), anyInt(), any(), any(), any(),
+                any(), any());
+
+        assertTrue(mInternalService.handleCallNotificationKey(UserHandle.USER_SYSTEM, false));
+        waitForIdle();
+        verify(decline).send(any(Context.class), eq(0), isNull(), isNull(), isNull(),
+                isNull(), any(Bundle.class));
+    }
+
+    @Test
+    public void testIncomingCallKey_ignoresOtherUsersAndAmbiguousCalls() {
+        PendingIntent answer = mock(PendingIntent.class);
+        PendingIntent decline = mock(PendingIntent.class);
+        addHardwareKeyCall(1, 10, answer, decline);
+        assertFalse(mInternalService.handleCallNotificationKey(UserHandle.USER_SYSTEM, true));
+        addHardwareKeyCall(2, UserHandle.USER_SYSTEM, answer, decline);
+        addHardwareKeyCall(3, UserHandle.USER_SYSTEM, answer, decline);
+        assertFalse(mInternalService.handleCallNotificationKey(UserHandle.USER_SYSTEM, true));
+    }
+
+    @Test
+    public void testCallNotificationKey_ignoresMissingOrForeignActions() {
+        PendingIntent answer = mock(PendingIntent.class);
+        PendingIntent decline = mock(PendingIntent.class);
+        Notification notification = addHardwareKeyCall(1, UserHandle.USER_SYSTEM, answer, decline);
+        notification.extras.putInt(Notification.EXTRA_CALL_TYPE,
+                Notification.CallStyle.CALL_TYPE_ONGOING);
+        assertFalse(mInternalService.handleCallNotificationKey(UserHandle.USER_SYSTEM, false));
+        notification.extras.putInt(Notification.EXTRA_CALL_TYPE,
+                Notification.CallStyle.CALL_TYPE_INCOMING);
+        notification.extras.remove(Notification.EXTRA_ANSWER_INTENT);
+        assertFalse(mInternalService.handleCallNotificationKey(UserHandle.USER_SYSTEM, true));
+        when(decline.getCreatorUid()).thenReturn(mUid + 1);
+        assertFalse(mInternalService.handleCallNotificationKey(UserHandle.USER_SYSTEM, false));
+    }
+
+    @Test
+    public void testCallNotificationKey_hangsUpOngoingButDoesNotAnswerIt() throws Exception {
+        PendingIntent answer = mock(PendingIntent.class);
+        PendingIntent decline = mock(PendingIntent.class);
+        PendingIntent hangUp = mock(PendingIntent.class);
+        when(hangUp.getCreatorUid()).thenReturn(mUid);
+        Notification notification = addHardwareKeyCall(1, UserHandle.USER_SYSTEM, answer, decline);
+        notification.extras.putInt(Notification.EXTRA_CALL_TYPE,
+                Notification.CallStyle.CALL_TYPE_ONGOING);
+        notification.extras.putParcelable(Notification.EXTRA_HANG_UP_INTENT, hangUp);
+
+        assertFalse(mInternalService.handleCallNotificationKey(UserHandle.USER_SYSTEM, true));
+        assertTrue(mInternalService.handleCallNotificationKey(UserHandle.USER_SYSTEM, false));
+        waitForIdle();
+        verify(hangUp).send(any(Context.class), eq(0), isNull(), isNull(), isNull(),
+                isNull(), any(Bundle.class));
+        verify(decline, never()).send(any(Context.class), anyInt(), any(), any(), any(),
+                any(), any());
+        verify(answer, never()).send(any(Context.class), anyInt(), any(), any(), any(),
+                any(), any());
+    }
+
+    @Test
+    public void testCallNotificationKey_doesNotDeclineAfterCallBecomesOngoing() throws Exception {
+        PendingIntent answer = mock(PendingIntent.class);
+        PendingIntent decline = mock(PendingIntent.class);
+        Notification notification = addHardwareKeyCall(1, UserHandle.USER_SYSTEM, answer, decline);
+        assertTrue(mInternalService.handleCallNotificationKey(UserHandle.USER_SYSTEM, false));
+        notification.extras.putInt(Notification.EXTRA_CALL_TYPE,
+                Notification.CallStyle.CALL_TYPE_ONGOING);
+        waitForIdle();
+        verify(decline, never()).send(any(Context.class), anyInt(), any(), any(), any(),
+                any(), any());
+    }
+
+    @Test
+    public void testCallNotificationKey_doesNotChooseBetweenIncomingAndOngoing() {
+        PendingIntent answer = mock(PendingIntent.class);
+        PendingIntent decline = mock(PendingIntent.class);
+        addHardwareKeyCall(1, UserHandle.USER_SYSTEM, answer, decline);
+        Notification ongoing = addHardwareKeyCall(2, UserHandle.USER_SYSTEM, answer, decline);
+        ongoing.extras.putInt(Notification.EXTRA_CALL_TYPE,
+                Notification.CallStyle.CALL_TYPE_ONGOING);
+        ongoing.extras.putParcelable(Notification.EXTRA_HANG_UP_INTENT, decline);
+        assertFalse(mInternalService.handleCallNotificationKey(UserHandle.USER_SYSTEM, false));
+    }
+
+    @Test
+    public void testIncomingCallKey_doesNotSendRemovedNotification() throws Exception {
+        PendingIntent answer = mock(PendingIntent.class);
+        PendingIntent decline = mock(PendingIntent.class);
+        addHardwareKeyCall(1, UserHandle.USER_SYSTEM, answer, decline);
+        assertTrue(mInternalService.handleCallNotificationKey(UserHandle.USER_SYSTEM, true));
+        mService.clearNotifications();
+        waitForIdle();
+        verify(answer, never()).send(any(Context.class), anyInt(), any(), any(), any(),
+                any(), any());
+    }
+
+    @Test
+    public void testCallNotificationKey_ignoresNonCallStyleNotification() throws Exception {
+        PendingIntent answer = mock(PendingIntent.class);
+        PendingIntent decline = mock(PendingIntent.class);
+        Notification notification = addHardwareKeyCall(1, UserHandle.USER_SYSTEM, answer, decline);
+        // Even call-category notifications with actions and call extras must use CallStyle.
+        notification.extras.putString(Notification.EXTRA_TEMPLATE,
+                Notification.BigTextStyle.class.getName());
+        assertFalse(mInternalService.handleCallNotificationKey(UserHandle.USER_SYSTEM, true));
+        assertFalse(mInternalService.handleCallNotificationKey(UserHandle.USER_SYSTEM, false));
+        waitForIdle();
+        verify(answer, never()).send(any(Context.class), anyInt(), any(), any(), any(),
+                any(), any());
+        verify(decline, never()).send(any(Context.class), anyInt(), any(), any(), any(),
+                any(), any());
+    }
+
+    private Notification addHardwareKeyCall(int id, int userId, PendingIntent answer,
+            PendingIntent decline) {
+        when(answer.getCreatorUid()).thenReturn(mUid);
+        when(decline.getCreatorUid()).thenReturn(mUid);
+        Notification notification = new Notification.Builder(mContext, "")
+                .setSmallIcon(android.R.drawable.sym_def_app_icon)
+                .setStyle(Notification.CallStyle.forIncomingCall(
+                        new Person.Builder().setName("Caller").build(), decline, answer))
+                .build();
+        StatusBarNotification sbn = new StatusBarNotification(PKG, PKG, id, null, mUid, 0,
+                notification, UserHandle.of(userId), null, 0);
+        mService.addNotification(new NotificationRecord(mContext, sbn, mTestNotificationChannel));
+        return notification;
+    }
+
+    @Test
     public void testRemoveForegroundServiceFlagFromNotification_enqueued() {
         when(mAmi.applyForegroundServiceNotification(
                 any(), anyString(), anyInt(), anyString(), anyInt()))

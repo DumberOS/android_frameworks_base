@@ -174,6 +174,7 @@ import android.annotation.WorkerThread;
 import android.app.ActivityManager;
 import android.app.ActivityManagerInternal;
 import android.app.ActivityManagerInternal.ServiceNotificationPolicy;
+import android.app.ActivityOptions;
 import android.app.ActivityTaskManager;
 import android.app.AlarmManager;
 import android.app.AppGlobals;
@@ -7176,7 +7177,75 @@ public class NotificationManagerService extends SystemService {
     /**
      * The private API only accessible to the system process.
      */
+    @GuardedBy("mNotificationLock")
+    private NotificationRecord findCallNotificationLocked(int userId, boolean answer) {
+        NotificationRecord candidate = null;
+        for (NotificationRecord record : mNotificationList) {
+            Notification notification = record.getNotification();
+            int callType = notification.extras.getInt(Notification.EXTRA_CALL_TYPE);
+            if (record.getSbn().getUserId() != userId
+                    || !Notification.CATEGORY_CALL.equals(notification.category)
+                    || !notification.isStyle(Notification.CallStyle.class)
+                    || (callType != Notification.CallStyle.CALL_TYPE_INCOMING
+                            && (answer || callType != Notification.CallStyle.CALL_TYPE_ONGOING))) {
+                continue;
+            }
+            // Do not guess which call the user wants when multiple calls qualify.
+            if (candidate != null) return null;
+            candidate = record;
+        }
+        return candidate;
+    }
+
+    private PendingIntent getCallNotificationAction(NotificationRecord record, boolean answer) {
+        Notification notification = record.getNotification();
+        if (notification.isStyle(Notification.CallStyle.class)) {
+            int callType = notification.extras.getInt(Notification.EXTRA_CALL_TYPE);
+            String extra = answer ? Notification.EXTRA_ANSWER_INTENT
+                    : callType == Notification.CallStyle.CALL_TYPE_INCOMING
+                            ? Notification.EXTRA_DECLINE_INTENT : Notification.EXTRA_HANG_UP_INTENT;
+            return notification.extras.getParcelable(extra, PendingIntent.class);
+        }
+        return null;
+    }
+
     private final NotificationManagerInternal mInternalService = new NotificationManagerInternal() {
+
+        @Override
+        public boolean handleCallNotificationKey(int userId, boolean answer) {
+            final NotificationRecord record;
+            final PendingIntent intent;
+            final int callType;
+            synchronized (mNotificationLock) {
+                record = findCallNotificationLocked(userId, answer);
+                if (record == null) return false;
+                callType = record.getNotification().extras.getInt(Notification.EXTRA_CALL_TYPE);
+                intent = getCallNotificationAction(record, answer);
+                if (intent == null || intent.getCreatorUid() != record.getSbn().getUid()) {
+                    return false;
+                }
+            }
+            // Never launch an app on the input thread or while holding the notification lock.
+            return mHandler.post(() -> {
+                synchronized (mNotificationLock) {
+                    if (findCallNotificationLocked(userId, answer) != record
+                            || record.getNotification().extras.getInt(Notification.EXTRA_CALL_TYPE)
+                                    != callType
+                            || !intent.equals(getCallNotificationAction(record, answer))
+                            || ActivityManager.getCurrentUser() != userId) {
+                        return;
+                    }
+                }
+                try {
+                    ActivityOptions options = ActivityOptions.makeBasic();
+                    options.setPendingIntentBackgroundActivityStartMode(
+                            ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED);
+                    intent.send(getContext(), 0, null, null, null, null, options.toBundle());
+                } catch (PendingIntent.CanceledException e) {
+                    Slog.w(TAG, "Call notification action was canceled", e);
+                }
+            });
+        }
 
         @Override
         public NotificationChannel getNotificationChannel(String pkg, int uid, String

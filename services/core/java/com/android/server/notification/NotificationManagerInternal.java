@@ -40,6 +40,14 @@ public interface NotificationManagerInternal {
     /** is the given notification currently showing? */
     boolean isNotificationShown(String pkg, String tag, int notificationId, int userId);
 
+    /**
+     * Queues the answer, decline or hang-up action of an unambiguous CallStyle notification.
+     * When answer is true, only incoming calls qualify; otherwise incoming and ongoing calls do.
+     * Called by hardware-key policy only after Telecom has declined to handle the key.
+     * Returns whether the key should be consumed. Only notifications for userId are considered.
+     */
+    boolean handleCallNotificationKey(int userId, boolean answer);
+
     void removeForegroundServiceFlagFromNotification(String pkg, int notificationId, int userId);
 
     void removeUserInitiatedJobFlagFromNotification(String pkg, int notificationId, int userId);

@@ -96,6 +96,7 @@ import com.android.internal.policy.KeyInterceptionInfo;
 import com.android.internal.util.FrameworkStatsLog;
 import com.android.server.GestureLauncherService;
 import com.android.server.LocalServices;
+import com.android.server.notification.NotificationManagerInternal;
 import com.android.server.input.InputManagerInternal;
 import com.android.server.input.KeyboardMetricsCollector.KeyboardLogEvent;
 import com.android.server.inputmethod.InputMethodManagerInternal;
@@ -521,6 +522,14 @@ class TestPhoneWindowManager {
         doReturn(true).when(mTelecomManager).endCall();
     }
 
+    NotificationManagerInternal mockIncomingCallNotification() {
+        NotificationManagerInternal notifications = Mockito.mock(NotificationManagerInternal.class);
+        doReturn(notifications).when(() -> LocalServices.getService(
+                eq(NotificationManagerInternal.class)));
+        doReturn(true).when(notifications).handleCallNotificationKey(anyInt(), eq(false));
+        return notifications;
+    }
+
     void overrideTogglePanel() {
         // Can't directly mock on IStatusbarService, use spyOn and override the specific api.
         mPhoneWindowManager.getStatusBarService();
@@ -547,6 +556,13 @@ class TestPhoneWindowManager {
 
     void setKeyguardServiceDelegateIsShowing(boolean isShowing) {
         doReturn(isShowing).when(mKeyguardServiceDelegate).isShowing();
+    }
+
+    void setLockedWithFullScreenCall() {
+        doReturn(true).when(mKeyguardServiceDelegate).isShowing();
+        doReturn(true).when(mKeyguardServiceDelegate).isOccluded();
+        doReturn(true).when(mKeyguardServiceDelegate).isInputRestricted();
+        doReturn(true).when(mPhoneWindowManager).keyguardOn();
     }
 
     void setupAssistForLaunch() {

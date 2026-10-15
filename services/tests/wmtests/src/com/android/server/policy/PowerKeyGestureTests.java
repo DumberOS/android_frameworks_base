@@ -23,8 +23,15 @@ import static com.android.server.policy.PhoneWindowManager.LONG_PRESS_POWER_GLOB
 import static com.android.server.policy.PhoneWindowManager.SHORT_PRESS_POWER_DREAM_OR_SLEEP;
 import static com.android.server.policy.PhoneWindowManager.SHORT_PRESS_POWER_GO_TO_SLEEP;
 
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+
 import android.provider.Settings;
 import android.view.Display;
+
+import com.android.server.notification.NotificationManagerInternal;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -54,6 +61,47 @@ public class PowerKeyGestureTests extends ShortcutKeyTestBase {
         mPhoneWindowManager.overrideDisplayState(Display.STATE_OFF);
         sendKey(KEYCODE_POWER);
         mPhoneWindowManager.assertPowerWakeUp();
+        mPhoneWindowManager.assertNoPowerSleep();
+    }
+
+    @Test
+    public void testPowerRejectsIncomingNotificationWithoutSleeping() {
+        NotificationManagerInternal notifications =
+                mPhoneWindowManager.mockIncomingCallNotification();
+        mPhoneWindowManager.overrideShortPressOnPower(SHORT_PRESS_POWER_GO_TO_SLEEP);
+        sendKey(KEYCODE_POWER);
+        verify(notifications).handleCallNotificationKey(anyInt(), eq(false));
+        mPhoneWindowManager.assertNoPowerSleep();
+    }
+
+    @Test
+    public void testPowerRejectsIncomingNotificationOverLockedKeyguard() {
+        NotificationManagerInternal notifications =
+                mPhoneWindowManager.mockIncomingCallNotification();
+        mPhoneWindowManager.setLockedWithFullScreenCall();
+        mPhoneWindowManager.overrideShortPressOnPower(SHORT_PRESS_POWER_GO_TO_SLEEP);
+        sendKey(KEYCODE_POWER);
+        verify(notifications).handleCallNotificationKey(anyInt(), eq(false));
+        mPhoneWindowManager.assertNoPowerSleep();
+    }
+
+    @Test
+    public void testPowerDoesNotRejectNotificationWhenScreenOff() {
+        NotificationManagerInternal notifications =
+                mPhoneWindowManager.mockIncomingCallNotification();
+        mPhoneWindowManager.overrideDisplayState(Display.STATE_OFF);
+        sendKey(KEYCODE_POWER);
+        verify(notifications, never()).handleCallNotificationKey(anyInt(), eq(false));
+        mPhoneWindowManager.assertPowerWakeUp();
+    }
+
+    @Test
+    public void testPowerPrefersTelecomOverNotification() {
+        NotificationManagerInternal notifications =
+                mPhoneWindowManager.mockIncomingCallNotification();
+        mPhoneWindowManager.setPhoneCallIsInProgress();
+        sendKey(KEYCODE_POWER);
+        verify(notifications, never()).handleCallNotificationKey(anyInt(), eq(false));
         mPhoneWindowManager.assertNoPowerSleep();
     }
 
