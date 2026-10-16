@@ -700,6 +700,26 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     private int mPowerButtonAction;
     private Action mDpadScreenOffAction;
     private Action mDpadCallActiveAction;
+    private volatile boolean mHasBuiltInVolumeKeys;
+
+    private final InputManager.InputDeviceListener mVolumeKeysDeviceListener =
+            new InputManager.InputDeviceListener() {
+                @Override
+                public void onInputDeviceAdded(int deviceId) {
+                    updateBuiltInVolumeKeys();
+                }
+
+                @Override
+                public void onInputDeviceRemoved(int deviceId) {
+                    updateBuiltInVolumeKeys();
+                }
+
+                @Override
+                public void onInputDeviceChanged(int deviceId) {
+                    updateBuiltInVolumeKeys();
+                }
+            };
+
     private Action mPowerSinglePressAction;
     private Action mMenuPressAction;
     private Action mMenuLongPressAction;
@@ -4282,7 +4302,8 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                     TelecomManager telecomManager = getTelecommService();
                     boolean isInCall = (telecomManager != null && telecomManager.isInCall()) ||
                             getCurrentAudioMode() == AudioManager.MODE_IN_COMMUNICATION;
-                    if (isInCall && mDpadCallActiveAction != Action.NOTHING) {
+                    if (isInCall && !mHasBuiltInVolumeKeys
+                            && mDpadCallActiveAction != Action.NOTHING) {
                         dispatchDirectAudioEvent(new KeyEvent(event.getDownTime(), event.getEventTime(),
                                 KeyEvent.ACTION_DOWN, event.getKeyCode() == KeyEvent.KEYCODE_DPAD_DOWN
                                     ? KeyEvent.KEYCODE_VOLUME_DOWN : KeyEvent.KEYCODE_VOLUME_UP, 0));
@@ -6401,6 +6422,25 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         return true;
     }
 
+    private void updateBuiltInVolumeKeys() {
+        boolean hasVolumeKeys = false;
+        for (int deviceId : mInputManager.getInputDeviceIds()) {
+            final InputDevice device = mInputManager.getInputDevice(deviceId);
+            // Headset and PMIC controllers can advertise volume keys absent from the phone.
+            if (device == null || device.isVirtual() || device.isExternal()
+                    || !"mtk-kpd".equals(device.getName())) {
+                continue;
+            }
+            final boolean[] keys = device.hasKeys(
+                    KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN);
+            if (keys[0] && keys[1]) {
+                hasVolumeKeys = true;
+                break;
+            }
+        }
+        mHasBuiltInVolumeKeys = hasVolumeKeys;
+    }
+
     private boolean isVoiceCallActive() {
         final TelecomManager telecomManager = getTelecommService();
         return telecomManager != null && telecomManager.isInCall();
@@ -7218,6 +7258,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     /** {@inheritDoc} */
     @Override
     public void systemReady() {
+        mInputManager.registerInputDeviceListener(mVolumeKeysDeviceListener, mHandler);
+        mHandler.post(this::updateBuiltInVolumeKeys);
+
         // In normal flow, systemReady is called before other system services are ready.
         // So it is better not to bind keyguard here.
         mKeyguardDelegate.onSystemReady();
