@@ -29,6 +29,7 @@ import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.res.Configuration;
 import android.graphics.PixelFormat;
 import android.hardware.biometrics.BiometricAuthenticator.Modality;
 import android.hardware.biometrics.BiometricConstants;
@@ -43,6 +44,7 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.os.UserManager;
 import android.util.Log;
+import android.view.ContextThemeWrapper;
 import android.view.Display;
 import android.view.DisplayInfo;
 import android.view.Gravity;
@@ -482,10 +484,22 @@ public class AuthContainerView extends LinearLayout
      * @param animatePanel if the credential view needs to own the panel expansion animation
      */
     private void addCredentialView(boolean animatePanel, boolean animateContents) {
-        final LayoutInflater factory = LayoutInflater.from(mContext);
-
         @Utils.CredentialType final int credentialType = Utils.getCredentialType(
                 mLockPatternUtils, mEffectiveUserId);
+
+        LayoutInflater factory = LayoutInflater.from(mContext);
+        final Configuration configuration = getResources().getConfiguration();
+        if ((credentialType == Utils.CREDENTIAL_PIN
+                || credentialType == Utils.CREDENTIAL_PASSWORD)
+                && Math.max(configuration.screenWidthDp, configuration.screenHeightDp) < 600) {
+            // Use the launcher's zoom-out ratio for just this dialog on short displays.
+            final Configuration compactConfiguration = new Configuration();
+            compactConfiguration.densityDpi = Math.round(configuration.densityDpi * 2f / 3f);
+            final ContextThemeWrapper compactContext =
+                    new ContextThemeWrapper(mContext, R.style.Theme_SystemUI);
+            compactContext.applyOverrideConfiguration(compactConfiguration);
+            factory = factory.cloneInContext(compactContext);
+        }
 
         switch (credentialType) {
             case Utils.CREDENTIAL_PATTERN:

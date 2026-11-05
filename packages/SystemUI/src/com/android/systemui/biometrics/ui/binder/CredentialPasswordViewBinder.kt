@@ -48,12 +48,13 @@ object CredentialPasswordViewBinder {
                 passwordField.requestFocus()
                 passwordField.scheduleShowSoftInput()
             }
-            passwordField.setOnEditorActionListener(
-                OnImeSubmitListener { text ->
-                    lifecycleScope.launch { viewModel.checkCredential(text, header) }
-                }
+            val onSubmit: (CharSequence) -> Unit = { text ->
+                lifecycleScope.launch { viewModel.checkCredential(text, header) }
+            }
+            passwordField.setOnEditorActionListener(OnImeSubmitListener(onSubmit))
+            passwordField.setOnKeyListener(
+                OnCredentialKeyListener(onBackInvokedCallback, onSubmit)
             )
-            passwordField.setOnKeyListener(OnBackButtonListener(onBackInvokedCallback))
             val pinPadView = view.findViewById(R.id.pin_pad) as? IPinPad
             if (pinPadView != null) {
                 PinPadViewBinder.bind(pinPadView, view)
@@ -94,9 +95,17 @@ object CredentialPasswordViewBinder {
     }
 }
 
-private class OnBackButtonListener(private val onBackInvokedCallback: OnBackInvokedCallback) :
-    View.OnKeyListener {
+private class OnCredentialKeyListener(
+    private val onBackInvokedCallback: OnBackInvokedCallback,
+    private val onSubmit: (CharSequence) -> Unit,
+) : View.OnKeyListener {
     override fun onKey(v: View, keyCode: Int, event: KeyEvent): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                onSubmit((v as TextView).text)
+            }
+            return true
+        }
         if (keyCode != KeyEvent.KEYCODE_BACK) {
             return false
         }
