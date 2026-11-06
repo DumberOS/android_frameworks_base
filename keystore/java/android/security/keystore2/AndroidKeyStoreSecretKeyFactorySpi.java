@@ -17,6 +17,7 @@
 package android.security.keystore2;
 
 import android.annotation.NonNull;
+import android.os.Binder;
 import android.security.GateKeeper;
 import android.security.keymaster.KeymasterArguments;
 import android.security.keymaster.KeymasterDefs;
@@ -237,6 +238,14 @@ public class AndroidKeyStoreSecretKeyFactorySpi extends SecretKeyFactorySpi {
             // Fingerprint-only key; will be invalidated if the root SID isn't in the SID list.
             invalidatedByBiometricEnrollment = !keymasterSecureUserIds.isEmpty()
                     && !keymasterSecureUserIds.contains(getGateKeeperSecureUserId());
+        }
+
+        // Apply CertHack only to the returned description, after deriving the
+        // real authorization and authentication requirements above. This path
+        // serves both asymmetric KeyFactory and symmetric SecretKeyFactory.
+        if (CertHack.shouldReportHardwareBacked(securityLevel, Binder.getCallingUid())) {
+            securityLevel = KeyProperties.SECURITY_LEVEL_TRUSTED_ENVIRONMENT;
+            insideSecureHardware = true;
         }
 
         return new KeyInfo(key.getUserKeyDescriptor().alias,

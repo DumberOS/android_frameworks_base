@@ -70,6 +70,13 @@ public final class CertHack {
         return canHack() && !isHackDisabledForUid(uid);
     }
 
+    // Match certificate reporting for local KeyInfo queries. This only changes
+    // reported metadata; software keys still have no hardware protection.
+    static boolean shouldReportHardwareBacked(int securityLevel, int uid) {
+        return securityLevel == KeyProperties.SECURITY_LEVEL_SOFTWARE
+                && canHackForUid(uid);
+    }
+
     public static boolean isHackGloballyDisabled() {
         return SystemProperties.getBoolean(DISABLE_PROPERTY, false);
     }
