@@ -5578,6 +5578,12 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     @Override
     public int interceptKeyBeforeQueueing(KeyEvent event, int policyFlags) {
         final int keyCode = event.getKeyCode();
+	if (keyCode == KeyEvent.KEYCODE_POWER) {
+            final InputDevice device = event.getDevice();
+            if (device != null && "sitronix_ts_i2c".equals(device.getName())) {
+                return 0;
+            }
+	}
         final boolean down = event.getAction() == KeyEvent.ACTION_DOWN;
         boolean isWakeKey = (policyFlags & WindowManagerPolicy.FLAG_WAKE) != 0
                 || event.isWakeKey();
