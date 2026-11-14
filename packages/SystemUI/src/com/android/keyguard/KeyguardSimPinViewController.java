@@ -39,6 +39,7 @@ import android.view.View;
 import android.view.WindowManager;
 import android.widget.ImageView;
 
+import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.LatencyTracker;
 import com.android.internal.widget.LockPatternUtils;
 import com.android.keyguard.KeyguardSecurityModel.SecurityMode;
@@ -297,6 +298,19 @@ public class KeyguardSimPinViewController
         }.start();
     }
 
+    @VisibleForTesting
+    PinResult getPinResult(String pin, int subId) {
+        try {
+            TelephonyManager telephonyManager = mTelephonyManager.createForSubscriptionId(subId);
+            return telephonyManager.supplyIccLockPin(pin);
+        } catch (RuntimeException e) {
+            // Telephony may be unavailable or die during the IPC, including when querying
+            // remaining attempts with an empty PIN. Keep keyguard alive and allow a retry.
+            Log.w(TAG, "Unable to check SIM PIN", e);
+            return PinResult.getDefaultFailedResult();
+        }
+    }
+
     /**
      * Since the IPC can block, we want to run the request in a separate thread
      * with a callback.
@@ -317,8 +331,7 @@ public class KeyguardSimPinViewController
             if (DEBUG) {
                 Log.v(TAG, "call supplyIccLockPin(subid=" + mSubId + ")");
             }
-            TelephonyManager telephonyManager = mTelephonyManager.createForSubscriptionId(mSubId);
-            final PinResult result = telephonyManager.supplyIccLockPin(mPin);
+            final PinResult result = getPinResult(mPin, mSubId);
             if (DEBUG) {
                 Log.v(TAG, "supplyIccLockPin returned: " + result.toString());
             }
