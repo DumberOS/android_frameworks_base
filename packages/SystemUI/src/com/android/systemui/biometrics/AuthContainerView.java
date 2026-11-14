@@ -533,6 +533,9 @@ public class AuthContainerView extends LinearLayout
         vm.setAnimateContents(animateContents);
         ((CredentialView) mCredentialView).init(vm, this, mPanelController, animatePanel);
 
+        // Compact density also scales elevation. Match the panel's pixel elevation so the
+        // credential view, added after the panel, is drawn above its opaque background.
+        mCredentialView.setElevation(mPanelView.getElevation());
         mLayout.addView(mCredentialView);
     }
 
