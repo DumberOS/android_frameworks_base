@@ -2593,7 +2593,8 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             return;
         }
         view.setFocusable(true);
-        view.setFocusableInTouchMode(true);
+        // Keep D-pad focus, but don't consume the first tap just to focus the item.
+        view.setFocusableInTouchMode(false);
         view.setDefaultFocusHighlightEnabled(true);
         float cornerRadius = view.getResources().getDimension(
                 com.android.systemui.res.R.dimen.global_actions_focus_highlight_corner_radius);
