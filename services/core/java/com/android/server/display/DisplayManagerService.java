@@ -422,6 +422,9 @@ public final class DisplayManagerService extends SystemService {
     private boolean mTouchRecoveryPulsePending;
     @GuardedBy("mSyncRoot")
     private boolean mTouchRecoveryPulseInProgress;
+    // A delayed pulse belongs to one wake. Never let it run during a later proximity cycle.
+    @GuardedBy("mSyncRoot")
+    private long mTouchRecoveryPulseGeneration;
 
     // Set to true when there are pending display changes that have yet to be applied
     // to the surface flinger state.
@@ -953,6 +956,10 @@ public final class DisplayManagerService extends SystemService {
             mDisplayStates.setValueAt(index, state);
             brightnessPair.brightness = brightnessState;
             brightnessPair.sdrBrightness = sdrBrightnessState;
+            if (displayId == Display.DEFAULT_DISPLAY && oldState != state) {
+                mTouchRecoveryPulseGeneration++;
+                mTouchRecoveryPulsePending = false;
+            }
             // TODO(b/297503094) Preventing disabled display from being turned on should happen
             // elsewhere.
             LogicalDisplay display = mLogicalDisplayMapper.getDisplayLocked(displayId);
@@ -989,44 +996,67 @@ public final class DisplayManagerService extends SystemService {
         if (displayId != Display.DEFAULT_DISPLAY) {
             return false;
         }
-        if (!Display.isOffState(oldState) || !Display.isOnState(state)
-                || state == TOUCH_RECOVERY_PULSE_STATE) {
+        if (!Display.isOffState(oldState) || state != Display.STATE_ON) {
             return false;
         }
         return !mTouchRecoveryPulsePending && !mTouchRecoveryPulseInProgress;
     }
 
     private void scheduleTouchRecoveryPulseOnWake(int displayId) {
+        final long generation;
         synchronized (mSyncRoot) {
             if (mTouchRecoveryPulsePending || mTouchRecoveryPulseInProgress) {
                 return;
             }
             mTouchRecoveryPulsePending = true;
+            generation = mTouchRecoveryPulseGeneration;
         }
 
         mHandler.postDelayed(() -> {
-            synchronized (mSyncRoot) {
-                if (!mTouchRecoveryPulsePending || mTouchRecoveryPulseInProgress) {
-                    return;
-                }
-                mTouchRecoveryPulsePending = false;
-                mTouchRecoveryPulseInProgress = true;
-            }
-
-            try {
-                pulseDisplayDeviceForTest(
-                        displayId, TOUCH_RECOVERY_PULSE_STATE, TOUCH_RECOVERY_PULSE_DURATION_MS);
-            } catch (RuntimeException e) {
-                Slog.w(TAG, "Touch recovery pulse on wake failed for display " + displayId, e);
-            } finally {
+            // The normal display path holds this monitor across both state bookkeeping and
+            // the slow hardware operation. mSyncRoot alone does not serialize those operations.
+            // Take the locks in the same order as DisplayBlanker.requestDisplayState().
+            synchronized (mDisplayBlanker) {
                 synchronized (mSyncRoot) {
-                    mTouchRecoveryPulseInProgress = false;
+                    if (generation != mTouchRecoveryPulseGeneration
+                            || !mTouchRecoveryPulsePending || mTouchRecoveryPulseInProgress) {
+                        return;
+                    }
+                    mTouchRecoveryPulsePending = false;
+                    if (!SystemProperties.getBoolean(PROP_TOUCH_RECOVERY_PULSE_ON_WAKE, false)
+                            || mDisplayStates.get(displayId) != Display.STATE_ON) {
+                        return;
+                    }
+                    mTouchRecoveryPulseInProgress = true;
+                }
+
+                try {
+                    Slog.d(TAG, "Touch recovery pulse after completed wake for display "
+                            + displayId + ", generation=" + generation);
+                    pulseDisplayDeviceForTest(
+                            displayId, TOUCH_RECOVERY_PULSE_STATE,
+                            TOUCH_RECOVERY_PULSE_DURATION_MS);
+                } catch (RuntimeException e) {
+                    Slog.w(TAG, "Touch recovery pulse on wake failed for display " + displayId, e);
+                } finally {
+                    synchronized (mSyncRoot) {
+                        mTouchRecoveryPulseInProgress = false;
+                    }
                 }
             }
         }, TOUCH_RECOVERY_PULSE_DELAY_MS);
     }
 
     void pulseDisplayDeviceForTest(int displayId, int pulseState, long durationMillis) {
+        // Also serialize manually requested pulses. In particular, an OFF request must not
+        // interleave with the pulse and then be overwritten by its saved ON state/brightness.
+        synchronized (mDisplayBlanker) {
+            pulseDisplayDeviceSerialized(displayId, pulseState, durationMillis);
+        }
+    }
+
+    @GuardedBy("mDisplayBlanker")
+    private void pulseDisplayDeviceSerialized(int displayId, int pulseState, long durationMillis) {
         final Runnable pulseRunnable;
         final int restoreState;
         final float restoreBrightness;
