@@ -2588,13 +2588,21 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
     private static final int DIALOG_DISMISS_DELAY = 300; // ms
     private static final int DIALOG_PRESS_DELAY = 850; // ms
 
-    private static void prepareItemViewForDpadNavigation(View view) {
+    @VisibleForTesting
+    static void prepareItemViewForDpadNavigation(View view) {
         if (view == null) {
             return;
         }
         view.setFocusable(true);
-        // Keep D-pad focus, but don't consume the first tap just to focus the item.
-        view.setFocusableInTouchMode(false);
+        view.setFocusableInTouchMode(true);
+        view.setOnTouchListener((v, event) -> {
+            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                // Take focus before ACTION_UP, where View otherwise consumes the click to focus.
+                v.requestFocus();
+            }
+            // Let View handle clicks, long presses, and cancelled gestures normally.
+            return false;
+        });
         view.setDefaultFocusHighlightEnabled(true);
         float cornerRadius = view.getResources().getDimension(
                 com.android.systemui.res.R.dimen.global_actions_focus_highlight_corner_radius);
