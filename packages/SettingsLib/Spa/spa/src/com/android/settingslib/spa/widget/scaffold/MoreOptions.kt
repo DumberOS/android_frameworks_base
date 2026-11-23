@@ -30,6 +30,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 
 /**
@@ -53,10 +54,11 @@ abstract class MoreOptionsScope {
 
 @Composable
 fun MoreOptionsAction(
+    modifier: Modifier = Modifier,
     content: @Composable MoreOptionsScope.() -> Unit,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
-    MoreOptionsActionButton { expanded = true }
+    MoreOptionsActionButton(modifier) { expanded = true }
     val onDismiss = { expanded = false }
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         val moreOptionsScope = remember(this) {
@@ -71,8 +73,8 @@ fun MoreOptionsAction(
 }
 
 @Composable
-private fun MoreOptionsActionButton(onClick: () -> Unit) {
-    IconButton(onClick) {
+private fun MoreOptionsActionButton(modifier: Modifier, onClick: () -> Unit) {
+    IconButton(onClick, modifier) {
         Icon(
             imageVector = Icons.Outlined.MoreVert,
             contentDescription = stringResource(R.string.abc_action_menu_overflow_description),

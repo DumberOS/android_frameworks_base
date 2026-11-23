@@ -19,6 +19,7 @@ package com.android.settingslib.spaprivileged.template.app
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.UserHandle
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,7 +29,17 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -76,6 +87,7 @@ data class AppListInput<T : AppRecord>(
     val header: @Composable () -> Unit,
     val noItemMessage: String? = null,
     val bottomPadding: Dp,
+    val dpadNavigation: Boolean = false,
 )
 
 /**
@@ -98,7 +110,7 @@ internal fun <T : AppRecord> AppListInput<T>.AppListImpl(
         val optionsState = viewModel.spinnerOptionsFlow.collectAsState(null, Dispatchers.IO)
         SpinnerOptions(optionsState, viewModel.optionFlow)
         val appListData = viewModel.appListDataFlow.collectAsState(null, Dispatchers.IO)
-        listModel.AppListWidget(appListData, header, bottomPadding, noItemMessage)
+        listModel.AppListWidget(appListData, header, bottomPadding, noItemMessage, dpadNavigation)
     }
 }
 
@@ -120,14 +132,20 @@ private fun SpinnerOptions(
     }
 }
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun <T : AppRecord> AppListModel<T>.AppListWidget(
     appListData: State<AppListData<T>?>,
     header: @Composable () -> Unit,
     bottomPadding: Dp,
-    noItemMessage: String?
+    noItemMessage: String?,
+    dpadNavigation: Boolean,
 ) {
     val timeMeasurer = rememberTimeMeasurer(TAG)
+    val listState = rememberLazyListStateAndHideKeyboardWhenStartScroll()
+    val inputModeManager = LocalInputModeManager.current
+    var lastFocusedApp by rememberSaveable { mutableStateOf<String?>(null) }
+    var focusRestored by remember { mutableStateOf(false) }
     appListData.value?.let { (list, option) ->
         timeMeasurer.logFirst("app list first loaded")
         if (list.isEmpty()) {
@@ -135,9 +153,19 @@ private fun <T : AppRecord> AppListModel<T>.AppListWidget(
             PlaceholderTitle(noItemMessage ?: stringResource(R.string.no_applications))
             return
         }
+        val initialFocusIndex = list.indexOfFirst {
+            it.record.focusKey() == lastFocusedApp
+        }.coerceAtLeast(0)
+        LaunchedEffect(list, dpadNavigation) {
+            if (dpadNavigation && !focusRestored) {
+                // Compose the saved app row before requesting focus when returning from App info.
+                // Item zero is the optional header.
+                listState.scrollToItem(initialFocusIndex + 1)
+            }
+        }
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            state = rememberLazyListStateAndHideKeyboardWhenStartScroll(),
+            state = listState,
             contentPadding = PaddingValues(bottom = bottomPadding),
         ) {
             item(contentType = CONTENT_TYPE_HEADER) {
@@ -150,13 +178,34 @@ private fun <T : AppRecord> AppListModel<T>.AppListWidget(
 
                 val appEntry = list[it]
                 val summary = getSummary(option, appEntry.record) ?: { "" }
-                remember(appEntry) {
+                val itemModel = remember(appEntry) {
                     AppListItemModel(appEntry.record, appEntry.label, summary)
-                }.AppItem()
+                }
+                if (dpadNavigation) {
+                    val focusRequester = remember { FocusRequester() }
+                    Box(Modifier.focusRequester(focusRequester).onFocusChanged { focusState ->
+                        if (focusState.hasFocus) {
+                            lastFocusedApp = appEntry.record.focusKey()
+                            focusRestored = true
+                        }
+                    }) {
+                        itemModel.AppItem()
+                    }
+                    if (!focusRestored && it == initialFocusIndex) {
+                        LaunchedEffect(Unit) {
+                            inputModeManager.requestInputMode(InputMode.Keyboard)
+                            focusRequester.requestFocus()
+                        }
+                    }
+                } else {
+                    itemModel.AppItem()
+                }
             }
         }
     }
 }
+
+private fun AppRecord.focusKey() = "${app.userId}:${app.packageName}"
 
 private fun <T : AppRecord> T.itemKey(option: Int) =
     listOf(option, app.packageName, app.userId)

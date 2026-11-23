@@ -45,6 +45,7 @@ fun <T : AppRecord> AppListPage(
     noMoreOptions: Boolean = false,
     matchAnyUserForAdmin: Boolean = false,
     noItemMessage: String? = null,
+    dpadNavigation: Boolean = false,
     moreOptions: @Composable MoreOptionsScope.() -> Unit = {},
     header: @Composable () -> Unit = {},
     appList: @Composable AppListInput<T>.() -> Unit = { AppList() },
@@ -52,6 +53,7 @@ fun <T : AppRecord> AppListPage(
     var showSystem by rememberSaveable { mutableStateOf(false) }
     SearchScaffold(
         title = title,
+        dpadNavigation = dpadNavigation,
         actions = {
             if (!noMoreOptions) {
                 MoreOptionsAction {
@@ -76,6 +78,7 @@ fun <T : AppRecord> AppListPage(
                 header = header,
                 bottomPadding = bottomPadding,
                 noItemMessage = noItemMessage,
+                dpadNavigation = dpadNavigation,
             )
             appList(appListInput)
         }

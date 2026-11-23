@@ -20,17 +20,19 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SettingsTopAppBar(
     title: String,
     scrollBehavior: TopAppBarScrollBehavior,
+    navigationIconModifier: Modifier = Modifier,
     actions: @Composable RowScope.() -> Unit,
 ) {
     CustomizedLargeTopAppBar(
         title = title,
-        navigationIcon = { NavigateBack() },
+        navigationIcon = { NavigateBack(navigationIconModifier) },
         actions = actions,
         scrollBehavior = scrollBehavior,
     )

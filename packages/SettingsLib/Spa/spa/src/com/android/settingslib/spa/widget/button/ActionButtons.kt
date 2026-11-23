@@ -61,31 +61,35 @@ data class ActionButton(
 )
 
 @Composable
-fun ActionButtons(actionButtons: List<ActionButton>) {
+fun ActionButtons(
+    actionButtons: List<ActionButton>,
+    modifier: Modifier = Modifier,
+    buttonModifier: (Int) -> Modifier = { Modifier },
+) {
     Row(
-        Modifier
+        modifier
             .padding(SettingsDimension.buttonPadding)
             .clip(SettingsShape.CornerExtraLarge)
             .height(IntrinsicSize.Min)
     ) {
         for ((index, actionButton) in actionButtons.withIndex()) {
             if (index > 0) ButtonDivider()
-            ActionButton(actionButton)
+            ActionButton(actionButton, buttonModifier(index))
         }
     }
 }
 
 @Composable
-private fun RowScope.ActionButton(actionButton: ActionButton) {
+private fun RowScope.ActionButton(actionButton: ActionButton, modifier: Modifier) {
     FilledTonalButton(
         onClick = actionButton.onClick,
-        modifier = Modifier
+        modifier = modifier
             .weight(1f)
             .fillMaxHeight(),
         enabled = actionButton.enabled,
-        // Because buttons could appear, disappear or change positions, reset the interaction source
-        // to prevent highlight the wrong button.
-        interactionSource = remember(actionButton) { MutableInteractionSource() },
+        // Reset when a different action occupies this slot, but retain focus indication when
+        // a new callback instance is supplied by recomposition.
+        interactionSource = remember(actionButton.text) { MutableInteractionSource() },
         shape = RectangleShape,
         colors = ButtonDefaults.filledTonalButtonColors(
             containerColor = SettingsTheme.colorScheme.surface,

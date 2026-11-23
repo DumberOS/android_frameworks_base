@@ -19,8 +19,10 @@ package com.android.settingslib.spa.widget.scaffold
 import androidx.activity.compose.BackHandler
 import androidx.appcompat.R
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -42,12 +44,22 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
@@ -65,16 +77,27 @@ import com.android.settingslib.spa.widget.preference.PreferenceModel
 /**
  * A [Scaffold] which content is can be full screen, and with a search feature built-in.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
 fun SearchScaffold(
     title: String,
     actions: @Composable RowScope.() -> Unit = {},
+    dpadNavigation: Boolean = false,
     content: @Composable (bottomPadding: Dp, searchQuery: () -> String) -> Unit,
 ) {
     ActivityTitle(title)
     var isSearchMode by rememberSaveable { mutableStateOf(false) }
     val viewModel: SearchScaffoldViewModel = viewModel()
+    val focusManager = LocalFocusManager.current
+    val contentFocus = remember { FocusRequester() }
+    val searchFocus = remember { FocusRequester() }
+    var restoreSearchFocus by remember { mutableStateOf(false) }
+    val navigationIconModifier = if (dpadNavigation) {
+        Modifier.focusProperties { canFocus = false }
+    } else Modifier
+    val toolbarModifier = if (dpadNavigation) {
+        Modifier.focusProperties { down = contentFocus }
+    } else Modifier
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
@@ -82,10 +105,27 @@ fun SearchScaffold(
         topBar = {
             SearchableTopAppBar(
                 title = title,
-                actions = actions,
+                actions = {
+                    if (dpadNavigation) Row(toolbarModifier) { actions() } else actions()
+                },
+                navigationIconModifier = navigationIconModifier,
+                searchModifier = if (dpadNavigation) {
+                    Modifier.focusRequester(searchFocus).then(toolbarModifier)
+                } else Modifier,
+                onSearchDown = if (dpadNavigation) ({ contentFocus.requestFocus() }) else null,
                 scrollBehavior = scrollBehavior,
                 isSearchMode = isSearchMode,
-                onSearchModeChange = { isSearchMode = it },
+                onSearchModeChange = {
+                    if (dpadNavigation && !it) restoreSearchFocus = true
+                    isSearchMode = it
+                },
+                onSearchButtonShown = {
+                    if (restoreSearchFocus) {
+                        focusManager.clearFocus(force = true)
+                        searchFocus.requestFocus()
+                        restoreSearchFocus = false
+                    }
+                },
                 searchQuery = viewModel.searchQuery,
                 onSearchQueryChange = { viewModel.searchQuery = it },
             )
@@ -95,7 +135,14 @@ fun SearchScaffold(
             Modifier
                 .padding(paddingValues.horizontalValues())
                 .padding(top = paddingValues.calculateTopPadding())
-                .focusable()
+                .then(if (dpadNavigation) {
+                    Modifier.focusRequester(contentFocus).focusProperties {
+                        exit = { direction ->
+                            if (direction == FocusDirection.Up) searchFocus
+                            else FocusRequester.Default
+                        }
+                    }.focusGroup()
+                } else Modifier.focusable())
                 .fillMaxSize()
         ) {
             content(paddingValues.calculateBottomPadding()) {
@@ -120,6 +167,10 @@ private fun SearchableTopAppBar(
     onSearchModeChange: (Boolean) -> Unit,
     searchQuery: TextFieldValue,
     onSearchQueryChange: (TextFieldValue) -> Unit,
+    navigationIconModifier: Modifier,
+    searchModifier: Modifier,
+    onSearchDown: (() -> Unit)?,
+    onSearchButtonShown: () -> Unit,
 ) {
     if (isSearchMode) {
         SearchTopAppBar(
@@ -127,15 +178,23 @@ private fun SearchableTopAppBar(
             onQueryChange = onSearchQueryChange,
             onClose = { onSearchModeChange(false) },
             actions = actions,
+            navigationIconModifier = navigationIconModifier,
+            searchModifier = searchModifier,
+            onSearchDown = onSearchDown,
         )
     } else {
-        SettingsTopAppBar(title, scrollBehavior) {
-            SearchAction {
+        SettingsTopAppBar(title, scrollBehavior, navigationIconModifier) {
+            SearchAction(searchModifier) {
                 scrollBehavior.collapse()
                 onSearchQueryChange(TextFieldValue())
                 onSearchModeChange(true)
             }
             actions()
+        }
+        // The toolbar is subcomposed by Scaffold; wait until its button is attached.
+        LaunchedEffect(Unit) {
+            withFrameNanos { }
+            onSearchButtonShown()
         }
     }
 }
@@ -145,14 +204,23 @@ private fun SearchTopAppBar(
     query: TextFieldValue,
     onQueryChange: (TextFieldValue) -> Unit,
     onClose: () -> Unit,
+    navigationIconModifier: Modifier = Modifier,
+    searchModifier: Modifier = Modifier,
+    onSearchDown: (() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
+    val searchFocus = remember { FocusRequester() }
     CustomizedTopAppBar(
-        title = { SearchBox(query, onQueryChange) },
-        navigationIcon = { CollapseAction(onClose) },
+        title = {
+            SearchBox(query, onQueryChange, searchModifier.focusRequester(searchFocus), onSearchDown)
+        },
+        navigationIcon = { CollapseAction(navigationIconModifier, onClose) },
         actions = {
             if (query.text.isNotEmpty()) {
-                ClearAction { onQueryChange(TextFieldValue()) }
+                ClearAction {
+                    onQueryChange(TextFieldValue())
+                    if (onSearchDown != null) searchFocus.requestFocus()
+                }
             }
             actions()
         },
@@ -161,16 +229,38 @@ private fun SearchTopAppBar(
 }
 
 @Composable
-private fun SearchBox(query: TextFieldValue, onQueryChange: (TextFieldValue) -> Unit) {
+private fun SearchBox(
+    query: TextFieldValue,
+    onQueryChange: (TextFieldValue) -> Unit,
+    modifier: Modifier = Modifier,
+    onDown: (() -> Unit)? = null,
+) {
     val focusRequester = remember { FocusRequester() }
     val textStyle = MaterialTheme.typography.bodyLarge
     val hideKeyboardAction = hideKeyboardAction()
+    val focusManager = LocalFocusManager.current
     TextField(
         value = query,
         onValueChange = onQueryChange,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .focusRequester(focusRequester),
+            .focusRequester(focusRequester)
+            .onPreviewKeyEvent { event ->
+                if (onDown != null && event.key == Key.DirectionDown) {
+                    if (event.type == KeyEventType.KeyDown) {
+                        hideKeyboardAction()
+                        onDown()
+                    }
+                    true
+                } else if (onDown != null && event.key == Key.DirectionRight &&
+                    query.selection.collapsed && query.selection.end == query.text.length
+                ) {
+                    // At the end of the query, Right reaches Clear and More options.
+                    if (event.type == KeyEventType.KeyDown) {
+                        focusManager.moveFocus(FocusDirection.Right)
+                    } else true
+                } else false
+            },
         textStyle = textStyle,
         placeholder = {
             Text(
@@ -191,6 +281,10 @@ private fun SearchBox(query: TextFieldValue, onQueryChange: (TextFieldValue) -> 
     )
 
     LaunchedEffect(focusRequester) {
+        // Replacing a focused toolbar schedules focus invalidation after composition. Let
+        // that finish before requesting focus on the newly attached text field.
+        withFrameNanos { }
+        if (onDown != null) focusManager.clearFocus(force = true)
         focusRequester.requestFocus()
     }
 }

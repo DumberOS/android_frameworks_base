@@ -47,13 +47,14 @@ import com.android.settingslib.spa.widget.preference.PreferenceModel
 fun SettingsScaffold(
     title: String,
     actions: @Composable RowScope.() -> Unit = {},
+    navigationIconModifier: Modifier = Modifier,
     content: @Composable (PaddingValues) -> Unit,
 ) {
     ActivityTitle(title)
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = { SettingsTopAppBar(title, scrollBehavior, actions) },
+        topBar = { SettingsTopAppBar(title, scrollBehavior, navigationIconModifier, actions) },
     ) { paddingValues ->
         Box(Modifier.padding(paddingValues.horizontalValues())) {
             content(paddingValues.verticalValues())

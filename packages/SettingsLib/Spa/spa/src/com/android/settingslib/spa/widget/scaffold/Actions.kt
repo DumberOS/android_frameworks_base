@@ -24,29 +24,34 @@ import androidx.compose.material.icons.outlined.FindInPage
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.android.settingslib.spa.framework.compose.LocalNavController
 
 /** Action that navigates back to last page. */
 @Composable
-internal fun NavigateBack() {
+internal fun NavigateBack(modifier: Modifier = Modifier) {
     val navController = LocalNavController.current
     val contentDescription = stringResource(R.string.abc_action_bar_up_description)
-    BackAction(contentDescription) {
+    BackAction(contentDescription, modifier = modifier) {
         navController.navigateBack()
     }
 }
 
 /** Action that collapses the search bar. */
 @Composable
-internal fun CollapseAction(onClick: () -> Unit) {
+internal fun CollapseAction(modifier: Modifier = Modifier, onClick: () -> Unit) {
     val contentDescription = stringResource(R.string.abc_toolbar_collapse_description)
-    BackAction(contentDescription, onClick)
+    BackAction(contentDescription, modifier, onClick)
 }
 
 @Composable
-private fun BackAction(contentDescription: String, onClick: () -> Unit) {
-    IconButton(onClick) {
+private fun BackAction(
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    IconButton(onClick, modifier) {
         Icon(
             imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
             contentDescription = contentDescription,
@@ -56,8 +61,8 @@ private fun BackAction(contentDescription: String, onClick: () -> Unit) {
 
 /** Action that expends the search bar. */
 @Composable
-internal fun SearchAction(onClick: () -> Unit) {
-    IconButton(onClick) {
+internal fun SearchAction(modifier: Modifier = Modifier, onClick: () -> Unit) {
+    IconButton(onClick, modifier) {
         Icon(
             imageVector = Icons.Outlined.FindInPage,
             contentDescription = stringResource(R.string.search_menu_title),

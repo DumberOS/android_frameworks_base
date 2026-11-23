@@ -18,7 +18,23 @@ package com.android.settingslib.spa.widget.scaffold
 
 import android.content.Context
 import androidx.appcompat.R
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -32,6 +48,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
+@OptIn(ExperimentalComposeUiApi::class, ExperimentalTestApi::class)
 @RunWith(AndroidJUnit4::class)
 class SearchScaffoldTest {
     @get:Rule
@@ -111,6 +128,78 @@ class SearchScaffoldTest {
         onClearButton().assertDoesNotExist()
         assertThat(searchQuery()).isEqualTo("")
     }
+
+    @Test
+    fun dpad_movesBetweenRowsAndToolbar_withoutFocusingBack() {
+        setDpadContent()
+        composeTestRule.onNodeWithText("First app").assertIsFocused()
+            .performKeyInput { pressKey(Key.DirectionDown) }
+        composeTestRule.onNodeWithText("Second app").assertIsFocused()
+            .performKeyInput { pressKey(Key.DirectionUp) }
+        composeTestRule.onNodeWithText("First app").assertIsFocused()
+            .performKeyInput { pressKey(Key.DirectionUp) }
+        onSearchButton().assertIsFocused().performKeyInput { pressKey(Key.DirectionRight) }
+        composeTestRule.onNodeWithContentDescription(
+            context.getString(R.string.abc_action_menu_overflow_description)
+        ).assertIsFocused().performKeyInput { pressKey(Key.DirectionLeft) }
+        onSearchButton().assertIsFocused().performKeyInput { pressKey(Key.DirectionLeft) }
+        onSearchButton().assertIsFocused().performKeyInput { pressKey(Key.DirectionDown) }
+        composeTestRule.onNodeWithText("First app").assertIsFocused()
+    }
+
+    @Test
+    fun dpad_searchCanReturnToResults_andClosingSearchRestoresToolbarFocus() {
+        setDpadContent()
+        composeTestRule.onNodeWithText("First app")
+            .performKeyInput { pressKey(Key.DirectionUp) }
+        onSearchButton().performKeyInput { pressKey(Key.DirectionCenter) }
+        onSearchHint().assertIsFocused().performKeyInput { pressKey(Key.DirectionDown) }
+        composeTestRule.onNodeWithText("First app").assertIsFocused()
+        composeTestRule.onNodeWithContentDescription(
+            context.getString(R.string.abc_toolbar_collapse_description)
+        ).performClick()
+        onSearchButton().assertIsFocused()
+    }
+
+    @Test
+    fun dpad_searchQueryCanBeCleared_withoutLosingFocus() {
+        setDpadContent()
+        composeTestRule.onNodeWithText("First app")
+            .performKeyInput { pressKey(Key.DirectionUp) }
+        onSearchButton().performKeyInput { pressKey(Key.DirectionCenter) }
+        onSearchHint().performTextInput(QUERY)
+        composeTestRule.onNodeWithText(QUERY)
+            .performKeyInput { pressKey(Key.DirectionRight) }
+        onClearButton().assertIsFocused().performKeyInput { pressKey(Key.DirectionCenter) }
+        onSearchHint().assertIsFocused()
+    }
+
+    private fun setDpadContent() {
+        composeTestRule.setContent {
+            val firstApp = remember { FocusRequester() }
+            val inputModeManager = LocalInputModeManager.current
+            SearchScaffold(
+                title = TITLE,
+                dpadNavigation = true,
+                actions = { MoreOptionsAction { MenuItem("Show system") {} } },
+            ) { _, _ ->
+                Column {
+                    Button(onClick = {}, modifier = Modifier.focusRequester(firstApp)) {
+                        Text("First app")
+                    }
+                    Button(onClick = {}) { Text("Second app") }
+                }
+                LaunchedEffect(Unit) {
+                    inputModeManager.requestInputMode(InputMode.Keyboard)
+                    firstApp.requestFocus()
+                }
+            }
+        }
+    }
+
+    private fun onSearchButton() = composeTestRule.onNodeWithContentDescription(
+        context.getString(R.string.search_menu_title)
+    )
 
     private fun setContent(): () -> String {
         lateinit var actualSearchQuery: () -> String
