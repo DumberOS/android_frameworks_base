@@ -6429,6 +6429,13 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     }
 
     private void updateBuiltInVolumeKeys() {
+        // The Doov R77 Pro has no dedicated volume buttons, but its mtk-kpd driver
+        // advertises both keys. Trust the vendor model over those capabilities.
+        if ("r77".equalsIgnoreCase(SystemProperties.get("ro.product.vendor.model").trim())) {
+            mHasBuiltInVolumeKeys = false;
+            return;
+        }
+
         boolean hasVolumeKeys = false;
         for (int deviceId : mInputManager.getInputDeviceIds()) {
             final InputDevice device = mInputManager.getInputDevice(deviceId);
